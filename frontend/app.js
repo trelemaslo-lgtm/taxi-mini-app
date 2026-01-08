@@ -91,4 +91,12 @@ function sendAd() {
 }
 
 loadAds();
+function applyTranslations() {
+  document.getElementById("title").innerText = t("title");
+  document.getElementById("addBtn").innerText = t("add");
+  document.getElementById("optClient").innerText = t("client");
+  document.getElementById("optDriver").innerText = t("driver");
+}
+
+applyTranslations();
 
