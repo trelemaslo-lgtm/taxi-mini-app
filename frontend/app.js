@@ -106,3 +106,24 @@ call_driver: "📞 Haydovchiga qo‘ng‘iroq",
 call_client: "📞 Mijozga qo‘ng‘iroq",
 call_driver: "📞 Ҳайдовчига қўнғироқ",
 call_client: "📞 Мижозга қўнғироқ",
+body: JSON.stringify({
+  initData: tg.initData,
+  role: document.getElementById("role").value,
+  route: document.getElementById("route").value,
+  time: document.getElementById("time").value,
+  price: document.getElementById("price").value,
+  phone: document.getElementById("phone").value
+})
+
+const callText =
+  ad.role === "driver" ? t("call_driver") : t("call_client");
+
+box.innerHTML += `
+  <div>
+    <b>${ad.role === "driver" ? "🚕" : "🧍"}</b><br>
+    ${ad.route}<br>
+    ⏰ ${ad.time}<br>
+    💰 ${ad.price}<br>
+    📞 <a href="tel:${ad.phone}">${callText}</a>
+  </div>
+`;
