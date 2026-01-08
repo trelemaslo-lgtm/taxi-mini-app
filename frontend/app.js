@@ -1,3 +1,9 @@
+const tg = window.Telegram.WebApp;
+tg.expand();
+
+const API_URL = "https://taxi-backend-5kl2.onrender.com"; // 🔴 ПРОВЕРЬ URL
+
+// --- ЯЗЫКИ ---
 const translations = {
   ru: {
     title: "📢 Объявления",
@@ -7,10 +13,10 @@ const translations = {
     route: "Маршрут",
     time: "Время",
     price: "Цена",
-    publish: "Опубликовать",
-    cancel: "Отмена"
+    send: "Опубликовать",
+    call_driver: "📞 Позвонить водителю",
+    call_client: "📞 Позвонить клиенту"
   },
-
   uz: {
     title: "📢 E’lonlar",
     add: "➕ E’lon joylash",
@@ -19,10 +25,10 @@ const translations = {
     route: "Yo‘nalish",
     time: "Vaqt",
     price: "Narx",
-    publish: "Joylash",
-    cancel: "Bekor qilish"
+    send: "Joylash",
+    call_driver: "📞 Haydovchiga qo‘ng‘iroq",
+    call_client: "📞 Mijozga qo‘ng‘iroq"
   },
-
   uzc: {
     title: "📢 Эълонлар",
     add: "➕ Эълон жойлаш",
@@ -31,53 +37,67 @@ const translations = {
     route: "Йўналиш",
     time: "Вақт",
     price: "Нарх",
-    publish: "Жойлаш",
-    cancel: "Бекор қилиш"
+    send: "Жойлаш",
+    call_driver: "📞 Ҳайдовчига қўнғироқ",
+    call_client: "📞 Мижозга қўнғироқ"
   }
 };
-const tg = window.Telegram.WebApp;
-tg.expand();
 
-let currentLang = "ru";
-
-// автоязык из Telegram
+// --- ЯЗЫК ИЗ TELEGRAM ---
+let lang = "ru";
 if (tg.initDataUnsafe?.user?.language_code === "uz") {
-  currentLang = "uz";
+  lang = "uz";
 }
+
 function t(key) {
-  return translations[currentLang][key] || key;
+  return translations[lang][key] || key;
 }
 
-const tg = window.Telegram.WebApp;
-tg.expand();
+// --- ПЕРЕВОДЫ ---
+document.getElementById("title").innerText = t("title");
+document.getElementById("addBtn").innerText = t("add");
+document.getElementById("optClient").innerText = t("client");
+document.getElementById("optDriver").innerText = t("driver");
+document.getElementById("sendBtn").innerText = t("send");
 
-const API = "https://taxi-backend-5kl2.onrender.com"; // твой backend
+document.getElementById("route").placeholder = t("route");
+document.getElementById("time").placeholder = t("time");
+document.getElementById("price").placeholder = t("price");
 
+// --- ПОКАЗ ФОРМЫ ---
+document.getElementById("addBtn").onclick = () => {
+  document.getElementById("form").style.display = "block";
+};
+
+// --- ЗАГРУЗКА ОБЪЯВЛЕНИЙ ---
 function loadAds() {
-  fetch(API + "/api/ads")
+  fetch(API_URL + "/api/ads")
     .then(r => r.json())
     .then(data => {
       const box = document.getElementById("ads");
       box.innerHTML = "";
+
       data.forEach(ad => {
+        const callText = ad.role === "driver"
+          ? t("call_driver")
+          : t("call_client");
+
         box.innerHTML += `
-          <div>
-            <b>${ad.role}</b><br>
-            ${ad.route}<br>
-            ${ad.time}<br>
-            ${ad.price}
+          <div class="card">
+            <b>${ad.role === "driver" ? "🚕 Водитель" : "🧍 Клиент"}</b><br>
+            📍 ${ad.route}<br>
+            ⏰ ${ad.time}<br>
+            💰 ${ad.price}<br>
+            📞 <a href="tel:${ad.phone}">${callText}</a>
           </div>
         `;
       });
     });
 }
 
-function openForm() {
-  document.getElementById("form").style.display = "block";
-}
-
+// --- ОТПРАВКА ОБЪЯВЛЕНИЯ ---
 function sendAd() {
-  fetch(API + "/api/ads", {
+  fetch(API_URL + "/api/ads", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -85,45 +105,13 @@ function sendAd() {
       role: document.getElementById("role").value,
       route: document.getElementById("route").value,
       time: document.getElementById("time").value,
-      price: document.getElementById("price").value
+      price: document.getElementById("price").value,
+      phone: document.getElementById("phone").value
     })
-  }).then(() => loadAds());
+  }).then(() => {
+    document.getElementById("form").style.display = "none";
+    loadAds();
+  });
 }
 
 loadAds();
-function applyTranslations() {
-  document.getElementById("title").innerText = t("title");
-  document.getElementById("addBtn").innerText = t("add");
-  document.getElementById("optClient").innerText = t("client");
-  document.getElementById("optDriver").innerText = t("driver");
-}
-
-applyTranslations();
-
-call_driver: "📞 Позвонить водителю",
-call_client: "📞 Позвонить клиенту",
-call_driver: "📞 Haydovchiga qo‘ng‘iroq",
-call_client: "📞 Mijozga qo‘ng‘iroq",
-call_driver: "📞 Ҳайдовчига қўнғироқ",
-call_client: "📞 Мижозга қўнғироқ",
-body: JSON.stringify({
-  initData: tg.initData,
-  role: document.getElementById("role").value,
-  route: document.getElementById("route").value,
-  time: document.getElementById("time").value,
-  price: document.getElementById("price").value,
-  phone: document.getElementById("phone").value
-})
-
-const callText =
-  ad.role === "driver" ? t("call_driver") : t("call_client");
-
-box.innerHTML += `
-  <div>
-    <b>${ad.role === "driver" ? "🚕" : "🧍"}</b><br>
-    ${ad.route}<br>
-    ⏰ ${ad.time}<br>
-    💰 ${ad.price}<br>
-    📞 <a href="tel:${ad.phone}">${callText}</a>
-  </div>
-`;
