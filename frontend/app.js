@@ -1,10 +1,9 @@
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const API_URL = "https://taxi-backend-5kl2.onrender.com"; // 🔴 ПРОВЕРЬ URL
+const API = "https://taxi-backend-5kl2.onrender.com"; // 🔴 ТВОЙ BACKEND
 
-// --- ЯЗЫКИ ---
-const translations = {
+const T = {
   ru: {
     title: "📢 Объявления",
     add: "➕ Разместить объявление",
@@ -43,17 +42,9 @@ const translations = {
   }
 };
 
-// --- ЯЗЫК ИЗ TELEGRAM ---
-let lang = "ru";
-if (tg.initDataUnsafe?.user?.language_code === "uz") {
-  lang = "uz";
-}
+let lang = tg.initDataUnsafe?.user?.language_code === "uz" ? "uz" : "ru";
+const t = k => T[lang][k];
 
-function t(key) {
-  return translations[lang][key] || key;
-}
-
-// --- ПЕРЕВОДЫ ---
 document.getElementById("title").innerText = t("title");
 document.getElementById("addBtn").innerText = t("add");
 document.getElementById("optClient").innerText = t("client");
@@ -64,19 +55,16 @@ document.getElementById("route").placeholder = t("route");
 document.getElementById("time").placeholder = t("time");
 document.getElementById("price").placeholder = t("price");
 
-// --- ПОКАЗ ФОРМЫ ---
 document.getElementById("addBtn").onclick = () => {
   document.getElementById("form").style.display = "block";
 };
 
-// --- ЗАГРУЗКА ОБЪЯВЛЕНИЙ ---
 function loadAds() {
-  fetch(API_URL + "/api/ads")
+  fetch(API + "/api/ads")
     .then(r => r.json())
     .then(data => {
       const box = document.getElementById("ads");
       box.innerHTML = "";
-
       data.forEach(ad => {
         const callText = ad.role === "driver"
           ? t("call_driver")
@@ -95,18 +83,17 @@ function loadAds() {
     });
 }
 
-// --- ОТПРАВКА ОБЪЯВЛЕНИЯ ---
 function sendAd() {
-  fetch(API_URL + "/api/ads", {
+  fetch(API + "/api/ads", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       initData: tg.initData,
-      role: document.getElementById("role").value,
-      route: document.getElementById("route").value,
-      time: document.getElementById("time").value,
-      price: document.getElementById("price").value,
-      phone: document.getElementById("phone").value
+      role: role.value,
+      route: route.value,
+      time: time.value,
+      price: price.value,
+      phone: phone.value
     })
   }).then(() => {
     document.getElementById("form").style.display = "none";
