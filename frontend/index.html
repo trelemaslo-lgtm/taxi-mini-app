@@ -7,29 +7,29 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-  <h2 id="title"></h2>
 
-  <div id="ads"></div>
+<h2 id="title"></h2>
 
-  <button id="addBtn"></button>
+<div id="ads"></div>
 
-  <div id="form" style="display:none;">
-    <select id="role">
-      <option value="client" id="optClient"></option>
-      <option value="driver" id="optDriver"></option>
-    </select>
+<button id="addBtn"></button>
 
-    <input id="route" placeholder="">
-    <input id="time" placeholder="">
-    <input id="price" placeholder="">
-    <input id="phone" placeholder="Телефон (+998...)">
+<div id="form" style="display:none;">
+  <select id="role">
+    <option value="client" id="optClient"></option>
+    <option value="driver" id="optDriver"></option>
+  </select>
 
-    <button onclick="sendAd()" id="sendBtn"></button>
-  </div>
+  <input id="route">
+  <input id="time">
+  <input id="price">
+  <input id="phone" placeholder="+998...">
 
-  <script src="app.js"></script>
+  <button id="sendBtn" onclick="sendAd()"></button>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
 
