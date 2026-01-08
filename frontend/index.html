@@ -9,16 +9,16 @@
 </head>
 <body>
 
-<h2>📢 Объявления</h2>
+<h2 id="title"></h2>
 
 <div id="ads"></div>
 
-<button onclick="openForm()">➕ Разместить объявление</button>
+<button id="addBtn"></button>
 
 <div id="form" style="display:none;">
   <select id="role">
-    <option value="client">Клиент</option>
-    <option value="driver">Водитель</option>
+   <option value="client" id="optClient"></option>
+<option value="driver" id="optDriver"></option>
   </select>
   <input id="route" placeholder="Маршрут" />
   <input id="time" placeholder="Время" />
