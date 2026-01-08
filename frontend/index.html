@@ -1,35 +1,35 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Объявления</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <title>Ingichka Taksi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-<p>TEST OK</p>
-  
-<h2 id="title"></h2>
+  <h2 id="title"></h2>
 
-<div id="ads"></div>
+  <div id="ads"></div>
 
-<button id="addBtn"></button>
-  
+  <button id="addBtn"></button>
 
-<div id="form" style="display:none;">
-  <select id="role">
-   <option value="client" id="optClient"></option>
-<option value="driver" id="optDriver"></option>
-  </select>
-  <input id="route" placeholder="Маршрут" />
-  <input id="time" placeholder="Время" />
-  <input id="price" placeholder="Цена" />
-  <input id="phone" placeholder="Телефон (+998...)" />
-  <button onclick="sendAd()">Отправить</button>
-</div>
+  <div id="form" style="display:none;">
+    <select id="role">
+      <option value="client" id="optClient"></option>
+      <option value="driver" id="optDriver"></option>
+    </select>
 
-<script src="app.js"></script>
+    <input id="route" placeholder="">
+    <input id="time" placeholder="">
+    <input id="price" placeholder="">
+    <input id="phone" placeholder="Телефон (+998...)">
+
+    <button onclick="sendAd()" id="sendBtn"></button>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
 
