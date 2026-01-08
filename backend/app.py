@@ -54,6 +54,33 @@ def auth():
         "status": "ok",
         "telegram": verified
     })
+    ads = []  # временное хранилище объявлений
+
+@app.route("/api/ads", methods=["POST"])
+def create_ad():
+    data = request.json
+
+    init_data = data.get("initData")
+    verified = verify_telegram_auth(init_data)
+    if not verified:
+        return jsonify({"error": "Auth failed"}), 403
+
+    user = eval(verified.get("user"))  # временно, потом безопасно
+    author_id = user.get("id")
+    name = user.get("first_name")
+
+    ad = {
+        "author_id": author_id,
+        "name": name,
+        "role": data.get("role"),  # client / driver
+        "route": data.get("route"),
+        "time": data.get("time"),
+        "price": data.get("price")
+    }
+
+    ads.append(ad)
+    return jsonify({"status": "ok", "ad": ad})
+
 
 # для gunicorn
 application = app
