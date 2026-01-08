@@ -100,3 +100,9 @@ function applyTranslations() {
 
 applyTranslations();
 
+call_driver: "📞 Позвонить водителю",
+call_client: "📞 Позвонить клиенту",
+call_driver: "📞 Haydovchiga qo‘ng‘iroq",
+call_client: "📞 Mijozga qo‘ng‘iroq",
+call_driver: "📞 Ҳайдовчига қўнғироқ",
+call_client: "📞 Мижозга қўнғироқ",
