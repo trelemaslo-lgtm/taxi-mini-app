@@ -1,3 +1,53 @@
+const translations = {
+  ru: {
+    title: "📢 Объявления",
+    add: "➕ Разместить объявление",
+    client: "Клиент",
+    driver: "Водитель",
+    route: "Маршрут",
+    time: "Время",
+    price: "Цена",
+    publish: "Опубликовать",
+    cancel: "Отмена"
+  },
+
+  uz: {
+    title: "📢 E’lonlar",
+    add: "➕ E’lon joylash",
+    client: "Mijoz",
+    driver: "Haydovchi",
+    route: "Yo‘nalish",
+    time: "Vaqt",
+    price: "Narx",
+    publish: "Joylash",
+    cancel: "Bekor qilish"
+  },
+
+  uzc: {
+    title: "📢 Эълонлар",
+    add: "➕ Эълон жойлаш",
+    client: "Мижоз",
+    driver: "Ҳайдовчи",
+    route: "Йўналиш",
+    time: "Вақт",
+    price: "Нарх",
+    publish: "Жойлаш",
+    cancel: "Бекор қилиш"
+  }
+};
+const tg = window.Telegram.WebApp;
+tg.expand();
+
+let currentLang = "ru";
+
+// автоязык из Telegram
+if (tg.initDataUnsafe?.user?.language_code === "uz") {
+  currentLang = "uz";
+}
+function t(key) {
+  return translations[currentLang][key] || key;
+}
+
 const tg = window.Telegram.WebApp;
 tg.expand();
 
