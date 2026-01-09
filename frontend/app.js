@@ -1,68 +1,73 @@
-/***********************
- * Telegram Mini App
- ***********************/
+/*************************
+ * SAFE TELEGRAM INIT
+ *************************/
 let tg = null;
 if (window.Telegram && window.Telegram.WebApp) {
   tg = window.Telegram.WebApp;
   tg.expand();
 }
 
-/***********************
- * Backend URL
- ***********************/
+/*************************
+ * BACKEND URL
+ *************************/
 const API = "https://taxi-backend-5kl2.onrender.com";
 
-/***********************
- * DOM elements
- ***********************/
+/*************************
+ * DOM
+ *************************/
 const addBtn = document.getElementById("addBtn");
 const form = document.getElementById("form");
 const adsBox = document.getElementById("ads");
 
-/***********************
- * Show form
- ***********************/
+/*************************
+ * SHOW FORM
+ *************************/
 addBtn.onclick = () => {
   form.style.display = "block";
 };
 
-/***********************
- * Load ads
- ***********************/
+/*************************
+ * LOAD ADS
+ *************************/
 function loadAds() {
   fetch(API + "/api/ads")
-    .then(res => res.json())
-    .then(data => {
+    .then(r => r.text())
+    .then(text => {
+      let data = [];
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = [];
+      }
+
       adsBox.innerHTML = "";
 
-      if (!Array.isArray(data) || data.length === 0) {
+      if (!data.length) {
         adsBox.innerHTML = "<p style='text-align:center;'>📭 Пока нет объявлений</p>";
         return;
       }
 
-      data.slice().reverse().forEach(ad => {
+      data.reverse().forEach(ad => {
         adsBox.innerHTML += `
           <div class="card">
-            <div><b>${ad.role === "driver" ? "🚕 Водитель" : "👤 Клиент"}</b></div>
-            <div>📍 ${ad.route || "-"}</div>
-            <div>⏰ ${ad.time || "-"}</div>
-            <div>🚕 ${ad.seats || "-"}</div>
-            <div>💰 ${ad.price || "-"}</div>
-            <div>
-              📞 <a href="tel:${ad.phone}" style="color:#ffd400;">Позвонить</a>
-            </div>
+            <b>${ad.role === "driver" ? "🚕 Водитель" : "👤 Клиент"}</b><br>
+            📍 ${ad.route || "-"}<br>
+            ⏰ ${ad.time || "-"}<br>
+            🚕 ${ad.seats || "-"}<br>
+            💰 ${ad.price || "-"}<br>
+            📞 <a href="tel:${ad.phone}" style="color:#ffd400;">Позвонить</a>
           </div>
         `;
       });
     })
-    .catch(err => {
-      console.error("Ошибка загрузки объявлений:", err);
+    .catch(() => {
+      adsBox.innerHTML = "<p style='text-align:center;'>⚠️ Ошибка загрузки</p>";
     });
 }
 
-/***********************
- * Send ad
- ***********************/
+/*************************
+ * SEND AD (ULTRA SAFE)
+ *************************/
 function sendAd() {
   const role = document.getElementById("role").value;
   const route = document.getElementById("route").value;
@@ -72,21 +77,15 @@ function sendAd() {
   const phone = document.getElementById("phone").value;
 
   if (!route || !price || !phone) {
-    if (tg) tg.showAlert("❗ Заполни все поля");
-    else alert("Заполни все поля");
+    tg ? tg.showAlert("❗ Заполни все поля") : alert("Заполни все поля");
     return;
   }
 
-  // Telegram feedback (разрешённое действие)
-  if (tg && tg.HapticFeedback) {
-    tg.HapticFeedback.impactOccurred("medium");
-  }
+  tg?.HapticFeedback?.impactOccurred("medium");
 
   fetch(API + "/api/ads", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       role,
       route,
@@ -96,34 +95,23 @@ function sendAd() {
       phone
     })
   })
-    .then(res => {
-      if (!res.ok) throw new Error("POST failed");
-      return res.json();
-    })
     .then(() => {
       form.style.display = "none";
       loadAds();
-
-      if (tg) {
-        tg.showAlert("✅ Объявление опубликовано");
-      }
+      tg?.showAlert("✅ Объявление опубликовано");
     })
-    .catch(err => {
-      console.error("POST error:", err);
-      if (tg) {
-        tg.showAlert("❌ Ошибка публикации");
-      } else {
-        alert("Ошибка публикации");
-      }
+    .catch(() => {
+      tg ? tg.showAlert("❌ Ошибка публикации") : alert("Ошибка публикации");
     });
 }
 
-/***********************
- * Make function global
- ***********************/
+/*************************
+ * EXPORT
+ *************************/
 window.sendAd = sendAd;
 
-/***********************
- * Start app
- ***********************/
+/*************************
+ * START
+ *************************/
 loadAds();
+
