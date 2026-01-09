@@ -1,30 +1,37 @@
-// Telegram Mini App init
-const tg = window.Telegram.WebApp;
-tg.expand();
+// Безопасная инициализация Telegram WebApp
+let tg = null;
+if (window.Telegram && window.Telegram.WebApp) {
+  tg = window.Telegram.WebApp;
+  tg.expand();
+}
 
-// 🔗 BACKEND URL (НЕ МЕНЯТЬ, ЕСЛИ РАБОТАЕТ)
+// Backend URL
 const API = "https://taxi-backend-5kl2.onrender.com";
 
-// Кнопка "Разместить объявление"
-document.getElementById("addBtn").onclick = () => {
-  document.getElementById("form").style.display = "block";
+// DOM elements
+const addBtn = document.getElementById("addBtn");
+const form = document.getElementById("form");
+const adsBox = document.getElementById("ads");
+
+// Показ формы
+addBtn.onclick = () => {
+  form.style.display = "block";
 };
 
 // Загрузка объявлений
 function loadAds() {
-  fetch(API + "/api/ads", { method: "GET" })
+  fetch(API + "/api/ads")
     .then(res => res.json())
     .then(data => {
-      const box = document.getElementById("ads");
-      box.innerHTML = "";
+      adsBox.innerHTML = "";
 
-      if (data.length === 0) {
-        box.innerHTML = "<p style='text-align:center;'>📭 Пока нет объявлений</p>";
+      if (!data || data.length === 0) {
+        adsBox.innerHTML = "<p style='text-align:center;'>📭 Пока нет объявлений</p>";
         return;
       }
 
       data.reverse().forEach(ad => {
-        box.innerHTML += `
+        adsBox.innerHTML += `
           <div class="card">
             <b>${ad.role === "driver" ? "🚕 Водитель" : "👤 Клиент"}</b><br>
             📍 ${ad.route}<br>
@@ -37,7 +44,7 @@ function loadAds() {
       });
     })
     .catch(err => {
-      console.error("Ошибка загрузки объявлений:", err);
+      console.error("Ошибка загрузки:", err);
     });
 }
 
@@ -57,10 +64,7 @@ function sendAd() {
 
   fetch(API + "/api/ads", {
     method: "POST",
-    mode: "cors",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       role,
       route,
@@ -75,15 +79,19 @@ function sendAd() {
       return res.json();
     })
     .then(() => {
-      document.getElementById("form").style.display = "none";
+      form.style.display = "none";
       loadAds();
     })
     .catch(err => {
       alert("Ошибка публикации ❌");
-      console.error("POST error:", err);
+      console.error(err);
     });
 }
 
-// Загружаем объявления при старте
+// Глобально, чтобы HTML видел функцию
+window.sendAd = sendAd;
+
+// Старт
 loadAds();
+
 
