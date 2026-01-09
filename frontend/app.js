@@ -29,21 +29,32 @@ function loadAds() {
 }
 
 function sendAd() {
+  const roleEl = document.getElementById("role");
+  const routeEl = document.getElementById("route");
+  const timeEl = document.getElementById("time");
+  const seatsEl = document.getElementById("seats");
+  const priceEl = document.getElementById("price");
+  const phoneEl = document.getElementById("phone");
+
   fetch(API + "/api/ads", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      role: role.value,
-      route: route.value,
-      time: time.value,
-      seats: seats.value,
-      price: price.value,
-      phone: phone.value
+      role: roleEl.value,
+      route: routeEl.value,
+      time: timeEl.value,
+      seats: seatsEl.value,
+      price: priceEl.value,
+      phone: phoneEl.value
     })
-  }).then(() => {
+  })
+  .then(res => res.json())
+  .then(() => {
     document.getElementById("form").style.display = "none";
     loadAds();
+  })
+  .catch(err => {
+    alert("Ошибка публикации ❌");
+    console.error(err);
   });
 }
-
-loadAds();
