@@ -10,7 +10,7 @@ if (window.Telegram && window.Telegram.WebApp) {
 /*************************
  * BACKEND URL
  *************************/
-const API = "https://taxi-backend-5kl2.onrender.com";
+const API = "";
 
 /*************************
  * DOM
