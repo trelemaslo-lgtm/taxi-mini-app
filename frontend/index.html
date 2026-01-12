@@ -54,6 +54,19 @@
 
   <!-- JS -->
   <script src="app.js"></script>
+  <script>
+  console.log("INLINE JS WORKS");
+
+  const loader = document.getElementById("loader");
+  const app = document.getElementById("app");
+
+  if (app) app.style.display = "block";
+
+  setTimeout(() => {
+    if (loader) loader.style.display = "none";
+  }, 1000);
+</script>
+
 </body>
 </html>
 
