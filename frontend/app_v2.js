@@ -14,13 +14,23 @@ let userLat = null, userLon = null;
 btnDrivers.onclick = ()=>switchTab("driver");
 btnClients.onclick = ()=>switchTab("client");
 
+// Загружаем объявления СРАЗУ
+loadAds();
+
+// Пытаемся получить геолокацию (необязательно)
 if (navigator.geolocation) {
-  navigator.geolocation.getCurrentPosition(pos=>{
-    userLat = pos.coords.latitude;
-    userLon = pos.coords.longitude;
-    loadAds();
-  });
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      loadAds(); // перезагрузка с дистанцией
+    },
+    err => {
+      console.log("Геолокация не получена");
+    }
+  );
 }
+
 
 function switchTab(role){
   currentTab = role;
