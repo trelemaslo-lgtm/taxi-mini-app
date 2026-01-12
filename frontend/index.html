@@ -1,85 +1,79 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ingichka Taksi</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
-<div id="loader">
+<!-- LOADING -->
+<div id="loader" class="loader">
   <div class="loading-text">LOADING</div>
   <div class="brand">created by <b>711 GROUP</b></div>
 </div>
 
-<div id="app" class="hidden">
+<!-- APP -->
+<div id="app" class="app hidden">
 
-  <header class="glass header">
-    🚕 Ingichka Taksi
-    <button onclick="openProfile()">👤</button>
+  <!-- HEADER -->
+  <header class="header glass">
+    🚕 <span>Ingichka Taksi</span>
+    <button class="icon" onclick="openSettings()">⚙️</button>
   </header>
 
-  <nav class="glass tabs">
-    <button onclick="switchTab('driver')">🚕</button>
-    <button onclick="switchTab('client')">👤</button>
-    <button onclick="openSettings()">⚙️</button>
-  </nav>
+  <!-- TABS -->
+  <div class="tabs glass">
+    <button onclick="switchTab('driver')" id="tab-driver">🚕 Водители</button>
+    <button onclick="switchTab('client')" id="tab-client">👤 Клиенты</button>
+  </div>
 
-  <main id="ads"></main>
+  <!-- ADS -->
+  <div id="ads" class="ads"></div>
 
-  <button class="publish" onclick="openForm()">＋</button>
+  <!-- ADD BUTTON -->
+  <button class="add-btn" onclick="openForm()">＋</button>
 </div>
 
 <!-- FORM -->
-<div id="form" class="modal hidden glass">
-  <h3>Новое объявление</h3>
-  <select id="role">
-    <option value="driver">Водитель</option>
-    <option value="client">Клиент</option>
-  </select>
-  <input id="route" placeholder="Маршрут">
-  <input id="time" placeholder="Время">
-  <input id="seats" placeholder="Места / режим">
-  <input id="price" placeholder="Цена">
-  <input id="phone" placeholder="+998...">
-  <textarea id="comment" placeholder="Комментарий"></textarea>
-  <button onclick="publishAd()">Опубликовать</button>
-  <button onclick="closeForm()">Назад</button>
-</div>
+<div id="form" class="modal hidden">
+  <div class="glass modal-card">
+    <h3>Новое объявление</h3>
 
-<!-- PROFILE -->
-<div id="profile" class="modal hidden glass">
-  <h3>Профиль</h3>
-  <p id="p-info"></p>
-  <button onclick="closeProfile()">Назад</button>
+    <select id="role">
+      <option value="driver">Водитель</option>
+      <option value="client">Клиент</option>
+    </select>
+
+    <input id="route" placeholder="Маршрут" />
+    <input id="time" placeholder="Время" />
+    <input id="seats" placeholder="Места / режим" />
+    <input id="price" placeholder="Цена" />
+    <input id="phone" placeholder="+998..." />
+    <textarea id="comment" placeholder="Комментарий"></textarea>
+
+    <button onclick="publishAd()">Опубликовать</button>
+    <button class="secondary" onclick="closeForm()">Назад</button>
+  </div>
 </div>
 
 <!-- SETTINGS -->
-<div id="settings" class="modal hidden glass">
-  <button onclick="setLang('ru')">🇷🇺 Русский</button>
-  <button onclick="setLang('uz')">🇺🇿 O‘zbek</button>
-  <button onclick="setLang('uzk')">🇺🇿 Ўзбекча</button>
-  <button onclick="openDonate()">💛 Поддержать</button>
-  <button id="admin-btn" onclick="openAdmin()" style="display:none">👑 Админка</button>
-  <button onclick="closeSettings()">Назад</button>
-</div>
+<div id="settings" class="modal hidden">
+  <div class="glass modal-card">
+    <h3>Настройки</h3>
 
-<!-- DONATE -->
-<div id="donate" class="modal hidden glass">
-  <h3>💛 Донат</h3>
-  <button onclick="donate(5000)">5 000</button>
-  <button onclick="donate(10000)">10 000</button>
-  <button onclick="donate(20000)">20 000</button>
-  <button onclick="closeDonate()">Назад</button>
-</div>
+    <button onclick="setLang('ru')">🇷🇺 Русский</button>
+    <button onclick="setLang('uz')">🇺🇿 O‘zbek</button>
+    <button onclick="setLang('uzk')">🇺🇿 Ўзбекча</button>
 
-<!-- ADMIN -->
-<div id="admin" class="modal hidden glass">
-  <h3>👑 Админка</h3>
-  <div id="admin-ads"></div>
-  <button onclick="closeAdmin()">Назад</button>
+    <button onclick="alert('Донат скоро')">💛 Поддержать</button>
+
+    <button class="secondary" onclick="closeSettings()">Закрыть</button>
+  </div>
 </div>
 
 <script src="app.js"></script>
