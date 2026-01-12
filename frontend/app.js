@@ -52,3 +52,59 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-profile").onclick = () => showScreen("screen-profile");
   document.getElementById("btn-settings").onclick = () => showScreen("screen-settings");
 });
+// ===== PROFILE LOGIC =====
+function saveProfile() {
+  const name = document.getElementById("profile-name").value.trim();
+  const phone = document.getElementById("profile-phone").value.trim();
+  const car = document.getElementById("profile-car").value.trim();
+  const role = localStorage.getItem("role");
+
+  if (!name || !phone) {
+    alert("Iltimos, ism va telefonni kiriting");
+    return;
+  }
+
+  const profile = { name, phone, role };
+
+  if (role === "driver") {
+    profile.car = car;
+  }
+
+  localStorage.setItem("profile", JSON.stringify(profile));
+  renderProfile();
+  showScreen("screen-home");
+}
+
+function renderProfile() {
+  const data = localStorage.getItem("profile");
+  if (!data) return;
+
+  const profile = JSON.parse(data);
+
+  document.getElementById("profile-name").style.display = "none";
+  document.getElementById("profile-phone").style.display = "none";
+  document.getElementById("profile-car").style.display = "none";
+
+  document.getElementById("profile-view").style.display = "block";
+
+  document.getElementById("view-name").innerText = profile.name;
+  document.getElementById("view-phone").innerText = profile.phone;
+
+  if (profile.role === "driver" && profile.car) {
+    document.getElementById("view-car").innerText = profile.car;
+    document.getElementById("view-car-wrap").style.display = "block";
+  } else {
+    document.getElementById("view-car-wrap").style.display = "none";
+  }
+}
+
+function editProfile() {
+  document.getElementById("profile-view").style.display = "none";
+
+  document.getElementById("profile-name").style.display = "block";
+  document.getElementById("profile-phone").style.display = "block";
+
+  const role = localStorage.getItem("role");
+  document.getElementById("profile-car").style.display =
+    role === "driver" ? "block" : "none";
+}
