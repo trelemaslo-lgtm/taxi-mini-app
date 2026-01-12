@@ -1,142 +1,135 @@
-const API = "https://taxi-backend-5kl2.onrender.com"; // ← ВСТАВЬ СВОЙ BACKEND URL
-const ADMIN_ID = 6813692852; // ← ТВОЙ TELEGRAM ID
-const DONATE_URL = "https://your-payment-link";
+/*********************************************************
+ * INGICHKA TAKSI — STABLE BASE APP.JS
+ * GUARANTEED NO LOADING FREEZE
+ *********************************************************/
 
-const tg = Telegram.WebApp;
+// === CONFIG ===
+const API = "https://taxi-backend-5kl2.onrender.com"; // ← ОБЯЗАТЕЛЬНО замени
+
+// === TELEGRAM ===
+const tg = window.Telegram.WebApp;
 tg.expand();
 
+// === DOM ELEMENTS ===
+let loader, app, ads, form, settings;
+
+// === STATE ===
 let currentTab = "driver";
-let userLocation = null;
-let likes = JSON.parse(localStorage.getItem("likes") || "{}");
 
+// === INIT ===
 document.addEventListener("DOMContentLoaded", () => {
+  // bind elements
+  loader = document.getElementById("loader");
+  app = document.getElementById("app");
+  ads = document.getElementById("ads");
+  form = document.getElementById("form");
+  settings = document.getElementById("settings");
+
+  // safety check
+  if (!loader || !app || !ads) {
+    alert("❌ HTML elements not found. Check index.html IDs.");
+    return;
+  }
+
+  // show app after loading
   setTimeout(() => {
-    loader.classList.add("hidden");
-    app.classList.remove("hidden");
+    loader.style.display = "none";
+    app.style.display = "block";
     loadAds();
-  }, 1000);
-
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      userLocation = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
-    });
-  }
-
-  const tgId = tg.initDataUnsafe?.user?.id;
-  if (tgId === ADMIN_ID) {
-    document.getElementById("admin-btn").style.display = "block";
-  }
+  }, 800);
 });
 
+// === LOAD ADS ===
+function loadAds() {
+  ads.innerHTML = "<div class='glass card'>Загрузка...</div>";
+
+  fetch(API + "/api/ads")
+    .then(res => res.json())
+    .then(data => {
+      ads.innerHTML = "";
+
+      const list = data.filter(a => a.role === currentTab);
+
+      if (list.length === 0) {
+        ads.innerHTML = "<div class='glass card'>Нет объявлений</div>";
+        return;
+      }
+
+      list.forEach(a => {
+        const card = document.createElement("div");
+        card.className = "glass card";
+        card.innerHTML = `
+          <b>${a.route || "-"}</b><br>
+          💰 ${a.price || "-"}<br>
+          🪑 ${a.seats || "-"}<br>
+          📞 <a href="tel:${a.phone}">${a.phone || "-"}</a>
+        `;
+        ads.appendChild(card);
+      });
+    })
+    .catch(err => {
+      ads.innerHTML = "<div class='glass card'>Ошибка загрузки</div>";
+      console.error(err);
+    });
+}
+
+// === TABS ===
 function switchTab(tab) {
   currentTab = tab;
   loadAds();
 }
 
-function getDistanceKm(lat1,lng1,lat2,lng2){
-  const R=6371;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLng=(lng2-lng1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2+
-    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-    Math.sin(dLng/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+// === FORM ===
+function openForm() {
+  form.style.display = "block";
+}
+function closeForm() {
+  form.style.display = "none";
 }
 
-function loadAds() {
-  fetch(API+"/api/ads")
-    .then(r=>r.json())
-    .then(data=>{
-      let list=data.filter(a=>a.role===currentTab);
-      if(userLocation){
-        list=list.map(a=>{
-          if(a.lat&&a.lng){
-            a.distance=getDistanceKm(userLocation.lat,userLocation.lng,a.lat,a.lng);
-          }
-          return a;
-        }).sort((a,b)=>(a.distance||999)-(b.distance||999));
-      }
-      ads.innerHTML="";
-      list.forEach(a=>{
-        const card=document.createElement("div");
-        card.className="card glass";
-        card.innerHTML=`
-          <b>${a.route}</b><br>
-          💰 ${a.price}<br>
-          🪑 ${a.seats}<br>
-          ${a.distance?`📍 ${a.distance.toFixed(1)} км<br>`:""}
-          ❤️ ${(likes[a.phone]||0)}
-          <button onclick="like('${a.phone}')">❤️</button>
-          <br><a href="tel:${a.phone}">📞 ${a.phone}</a>
-        `;
-        ads.appendChild(card);
-      });
-    });
-}
+// === PUBLISH AD ===
+function publishAd() {
+  const role = document.getElementById("role").value;
+  const route = document.getElementById("route").value;
+  const time = document.getElementById("time").value;
+  const seats = document.getElementById("seats").value;
+  const price = document.getElementById("price").value;
+  const phone = document.getElementById("phone").value;
+  const comment = document.getElementById("comment").value;
 
-function like(phone){
-  likes[phone]=(likes[phone]||0)+1;
-  localStorage.setItem("likes",JSON.stringify(likes));
-  loadAds();
-}
+  if (!route || !phone) {
+    alert("Заполни маршрут и телефон");
+    return;
+  }
 
-function openForm(){ form.classList.remove("hidden"); }
-function closeForm(){ form.classList.add("hidden"); }
-
-function publishAd(){
-  fetch(API+"/api/ads",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      role:role.value,
-      route:route.value,
-      time:time.value,
-      seats:seats.value,
-      price:price.value,
-      phone:phone.value,
-      comment:comment.value,
-      lat:userLocation?.lat,
-      lng:userLocation?.lng
+  fetch(API + "/api/ads", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      role,
+      route,
+      time,
+      seats,
+      price,
+      phone,
+      comment
     })
-  }).then(()=>{ closeForm(); loadAds(); });
-}
-
-function openProfile(){
-  p-info.innerText="Профиль активен";
-  profile.classList.remove("hidden");
-}
-function closeProfile(){ profile.classList.add("hidden"); }
-
-function openSettings(){ settings.classList.remove("hidden"); }
-function closeSettings(){ settings.classList.add("hidden"); }
-
-function openDonate(){ donate.classList.remove("hidden"); }
-function closeDonate(){ donate.classList.add("hidden"); }
-
-function donate(amount){
-  fetch(API+"/api/stats/donate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount})});
-  window.open(DONATE_URL,"_blank");
-}
-
-function openAdmin(){
-  admin.classList.remove("hidden");
-  fetch(API+"/api/ads").then(r=>r.json()).then(data=>{
-    admin-ads.innerHTML="";
-    data.forEach(a=>{
-      const el=document.createElement("div");
-      el.className="glass";
-      el.innerHTML=`${a.route}
-        <button onclick="delAd(${a.id})">🗑</button>`;
-      admin-ads.appendChild(el);
+  })
+    .then(() => {
+      closeForm();
+      loadAds();
+    })
+    .catch(err => {
+      alert("Ошибка публикации");
+      console.error(err);
     });
-  });
 }
-function closeAdmin(){ admin.classList.add("hidden"); }
-function delAd(id){
-  fetch(`${API}/api/admin/ad/${id}?admin_id=${ADMIN_ID}`,{method:"DELETE"})
-    .then(()=>openAdmin());
+
+// === SETTINGS ===
+function openSettings() {
+  settings.style.display = "block";
+}
+function closeSettings() {
+  settings.style.display = "none";
 }
 
