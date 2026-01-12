@@ -1,61 +1,139 @@
-* { box-sizing: border-box; font-family: -apple-system, system-ui; }
+* {
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
 body {
   margin: 0;
   background: radial-gradient(circle at top, #222, #000);
   color: #fff;
 }
-.hidden { display: none; }
 
-.glass {
-  background: rgba(255,255,255,0.12);
-  backdrop-filter: blur(18px);
-  border-radius: 20px;
-  padding: 14px;
-}
-
-#loader {
+/* LOADING */
+.loader {
   position: fixed;
   inset: 0;
+  background: #000;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
+  align-items: center;
 }
 
 .loading-text {
-  color: gold;
-  letter-spacing: 6px;
-  animation: pulse 1.4s infinite;
+  font-size: 28px;
+  letter-spacing: 8px;
+  color: #f5c400;
+  animation: pulse 1.5s infinite;
+}
+
+.brand {
+  margin-top: 20px;
+  font-size: 12px;
+  color: #888;
 }
 
 @keyframes pulse {
-  0% { opacity:.4 }
-  50% { opacity:1 }
-  100% { opacity:.4 }
+  0% { opacity: .3 }
+  50% { opacity: 1 }
+  100% { opacity: .3 }
 }
 
-.header, .tabs {
+/* APP */
+.hidden { display: none; }
+
+.app {
+  padding: 14px;
+}
+
+/* GLASS */
+.glass {
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(20px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+/* HEADER */
+.header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-#ads .card {
-  margin: 10px;
-}
-
-.publish {
-  position: fixed;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
   padding: 14px;
-  background: gold;
-  border: none;
-  border-radius: 20px;
+  margin-bottom: 12px;
 }
 
+.icon {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+}
+
+/* TABS */
+.tabs {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(0,0,0,.3);
+  color: white;
+}
+
+/* ADS */
+.ads {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  padding: 14px;
+}
+
+/* ADD */
+.add-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #f5c400;
+  border: none;
+  font-size: 22px;
+}
+
+/* MODAL */
 .modal {
   position: fixed;
-  inset: 10%;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-card {
+  width: 90%;
+  padding: 20px;
+}
+
+input, textarea, select, button {
+  width: 100%;
+  margin: 6px 0;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+}
+
+.secondary {
+  background: rgba(255,255,255,.15);
 }
