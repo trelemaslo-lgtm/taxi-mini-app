@@ -9,38 +9,54 @@
 </head>
 <body>
 
-<h2>🚕 Ingichka Taksi</h2>
-
-<div id="ads"></div>
-
-<button id="addBtn">➕ Разместить</button>
-
-<div id="form" style="display:none;">
-  <select id="role">
-    <option value="client">👤 Клиент</option>
-    <option value="driver">🚕 Водитель</option>
-  </select>
-
-  <input id="route" placeholder="📍 Маршрут">
-  
-  <select id="time">
-    <option value="now">⚡ Сейчас</option>
-    <option value="20min">⏱ Через 20 минут</option>
-  </select>
-
-  <select id="seats">
-    <option value="free">👥 Есть места</option>
-    <option value="full">🚕 Полный салон</option>
-  </select>
-
-  <input id="price" placeholder="💰 Цена">
-  <input id="phone" placeholder="📞 +998">
-
-  <button onclick="sendAd()">Опубликовать</button>
+<!-- LOADING -->
+<div id="loader" class="loader">
+  <div class="loader-glass">
+    <span class="loading-text">LOADING</span>
+  </div>
+  <div class="loader-footer">created by <b>711 GROUP</b></div>
 </div>
 
-<script src="app_v2.js"></script>
+<header class="glass header">
+  <h2>🚕 Ingichka Taksi</h2>
+  <div class="toggle">
+    <button id="btnDrivers" class="active">🚕 Водители</button>
+    <button id="btnClients">👤 Клиенты</button>
+  </div>
+</header>
+
+<main id="ads"></main>
+
+<button class="fab" onclick="openForm()">＋</button>
+
+<div id="formOverlay" class="overlay hidden">
+  <div class="glass form">
+    <h3>Новое объявление</h3>
+
+    <select id="role">
+      <option value="driver">🚕 Водитель</option>
+      <option value="client">👤 Клиент</option>
+    </select>
+
+    <input id="name" placeholder="Имя">
+    <input id="phone" placeholder="Телефон">
+    <input id="route" placeholder="Маршрут">
+
+    <select id="mode">
+      <option value="now">⚡ Сразу еду</option>
+      <option value="wait">👥 Ожидаю 4</option>
+      <option value="later">⏱ Через 20–30 мин</option>
+    </select>
+
+    <input id="price" placeholder="Цена">
+    <input id="seats" placeholder="Свободные места">
+    <textarea id="comment" placeholder="Комментарий"></textarea>
+
+    <button onclick="sendAd()">Опубликовать</button>
+    <button class="secondary" onclick="closeForm()">Отмена</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
-
-
