@@ -1,139 +1,211 @@
+/* =======================
+   TELEGRAM INIT
+======================= */
 const tg = window.Telegram?.WebApp;
 if (tg) {
   tg.ready();
   tg.expand();
 }
 
-const screens = document.querySelectorAll('.screen');
+/* =======================
+   STATE + STORAGE
+======================= */
+const STORAGE_KEY = "ingichka_app_state";
 
-const state = {
+let state = {
   lang: null,
   role: null,
-  profile: {},
-  ads: []
+  profile: null,
+  ads: [],
+  location: null
 };
 
-const i18n = {
-  uz: {
-    lang_title: "Tilni tanlang",
-    role_title: "Rolni tanlang",
-    driver: "Haydovchi",
-    client: "Mijoz",
-    profile_title: "Profil",
-    name: "Ism Familiya",
-    phone: "Telefon",
-    car: "Avto raqam",
-    continue: "Davom etish",
-    ads: "E’lonlar",
-    settings: "Sozlamalar",
-    language: "Til",
-    notifications: "Bildirishnomalar",
-    donate: "Donat",
-    about: "Biz haqimizda",
-    about_text: "Lokal taksi xizmati kichik shaharlar uchun"
-  },
-  ru: {
-    lang_title: "Выберите язык",
-    role_title: "Выберите роль",
-    driver: "Водитель",
-    client: "Клиент",
-    profile_title: "Профиль",
-    name: "Имя Фамилия",
-    phone: "Телефон",
-    car: "Номер авто",
-    continue: "Продолжить",
-    ads: "Объявления",
-    settings: "Настройки",
-    language: "Язык",
-    notifications: "Уведомления",
-    donate: "Донат",
-    about: "О нас",
-    about_text: "Локальный сервис такси для небольших городов"
-  },
-  uzk: {
-    lang_title: "Тилни танланг",
-    role_title: "Ролни танланг",
-    driver: "Ҳайдовчи",
-    client: "Мижоз",
-    profile_title: "Профил",
-    name: "Исм Фамилия",
-    phone: "Телефон",
-    car: "Авто рақам",
-    continue: "Давом этиш",
-    ads: "Эълонлар",
-    settings: "Созламалар",
-    language: "Тил",
-    notifications: "Билдиришномалар",
-    donate: "Донат",
-    about: "Биз ҳақимизда",
-    about_text: "Кичик шаҳарлар учун локал такси хизмати"
-  }
-};
+// load from storage
+const saved = localStorage.getItem(STORAGE_KEY);
+if (saved) state = JSON.parse(saved);
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+/* =======================
+   SCREENS
+======================= */
+const screens = document.querySelectorAll(".screen");
 
 function go(id) {
-  screens.forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  screens.forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
 }
 
-setTimeout(() => go('language'), 2200);
+/* =======================
+   LOADING FLOW
+======================= */
+setTimeout(() => {
+  if (!state.lang) go("language");
+  else if (!state.role) go("role");
+  else if (!state.profile) go("profileSetup");
+  else go("home");
+}, 2000);
 
-function applyLang() {
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    el.innerText = i18n[state.lang][el.dataset.i18n];
-  });
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-    el.placeholder = i18n[state.lang][el.dataset.i18nPh];
-  });
-}
-
+/* =======================
+   LANGUAGE
+======================= */
 function setLang(l) {
   state.lang = l;
-  applyLang();
-  go('role');
+  saveState();
+  go("role");
 }
 
+/* =======================
+   ROLE
+======================= */
 function setRole(r) {
   state.role = r;
-  go('profileSetup');
+  saveState();
+  go("profileSetup");
 }
 
+/* =======================
+   PROFILE
+======================= */
 function saveProfile() {
-  state.profile.name = name.value;
-  state.profile.phone = phone.value;
-  state.profile.car = car.value;
+  const name = document.getElementById("name").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const car = document.getElementById("car").value.trim();
+
+  if (!name || !phone) {
+    alert("Profilni to‘ldiring");
+    return;
+  }
+
+  state.profile = {
+    name,
+    phone,
+    car: state.role === "driver" ? car : "",
+    rating: state.profile?.rating || 5
+  };
+
+  saveState();
   renderProfile();
-  go('home');
+  go("home");
 }
 
 function renderProfile() {
-  pName.innerText = state.profile.name;
-  pPhone.innerText = state.profile.phone;
-  pCar.innerText = state.role === 'driver' ? state.profile.car : '';
+  if (!state.profile) return;
+  document.getElementById("pName").innerText = state.profile.name;
+  document.getElementById("pPhone").innerText = state.profile.phone;
+  document.getElementById("pCar").innerText =
+    state.role === "driver" ? state.profile.car : "";
 }
 
+/* =======================
+   GEOLOCATION
+======================= */
+function requestLocation() {
+  if (!navigator.geolocation) return;
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      state.location = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+      saveState();
+      renderAds();
+    },
+    () => {
+      state.location = null;
+      saveState();
+    }
+  );
+}
+requestLocation();
+
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/* =======================
+   ADS
+======================= */
 function createAd() {
+  if (state.role !== "driver") {
+    alert("Faqat haydovchi e’lon joylaydi");
+    return;
+  }
+
+  const from = prompt("Qayerdan?");
+  const to = prompt("Qayerga?");
+  const price = prompt("Narx?");
+  const seats = prompt("Bo‘sh joylar?");
+
+  if (!from || !to || !price) return;
+
   const ad = {
-    from: "A",
-    to: "B",
-    price: "25000",
-    time: Date.now()
+    id: Date.now(),
+    from,
+    to,
+    price,
+    seats,
+    created: Date.now(),
+    lat: state.location?.lat || null,
+    lng: state.location?.lng || null
   };
+
   state.ads.push(ad);
+  saveState();
   renderAds();
+  go("home");
 }
 
 function renderAds() {
-  adsList.innerHTML = '';
-  state.ads = state.ads.filter(a => Date.now() - a.time < 3600000);
-  state.ads.forEach(a => {
-    const d = document.createElement('div');
-    d.className = 'profile-card';
-    d.innerHTML = `
-      🚕 ${a.from} → ${a.to}<br>
-      💰 ${a.price}<br>
-      <a href="tel:+998901234567">📞</a>
+  const list = document.getElementById("adsList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  // auto delete 60 min
+  state.ads = state.ads.filter(
+    a => Date.now() - a.created < 60 * 60 * 1000
+  );
+  saveState();
+
+  state.ads.forEach(ad => {
+    let distText = "";
+    if (state.location && ad.lat) {
+      const km = distanceKm(
+        state.location.lat,
+        state.location.lng,
+        ad.lat,
+        ad.lng
+      ).toFixed(1);
+      distText = `📍 ${km} km`;
+    }
+
+    const div = document.createElement("div");
+    div.className = "profile-card";
+    div.innerHTML = `
+      🚕 ${ad.from} → ${ad.to}<br>
+      💰 ${ad.price}<br>
+      🪑 ${ad.seats || "-"}<br>
+      ${distText}<br>
+      <a href="tel:${state.profile.phone}">📞 Qo‘ng‘iroq</a>
     `;
-    adsList.appendChild(d);
+    list.appendChild(div);
   });
 }
+
+/* =======================
+   INIT
+======================= */
+renderProfile();
+renderAds();
 
