@@ -1,133 +1,135 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <title>Ingichka Taksi</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
+document.addEventListener("DOMContentLoaded", () => {
+  const API = "https://taxi-backend-5kl2.onrender.com";
+  const tg = window.Telegram.WebApp;
+  tg.expand();
 
-<!-- ===== SVG ICONS (SF SYMBOLS STYLE) ===== -->
-<svg style="display:none">
-  <symbol id="icon-home" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M12 3l9 8h-3v10h-5v-6H11v6H6V11H3z"/>
-  </symbol>
-  <symbol id="icon-plus" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M11 5h2v14h-2zM5 11h14v2H5z"/>
-  </symbol>
-  <symbol id="icon-user" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4 0-8 2-8 5v3h16v-3c0-3-4-5-8-5z"/>
-  </symbol>
-  <symbol id="icon-settings" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M12 8a4 4 0 100 8z"/>
-  </symbol>
-  <symbol id="icon-heart" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M12 21s-7-4.5-9.5-8.5S4 3 12 7c8-4 10.5 2 9.5 9.5S12 21 12 21z"/>
-  </symbol>
-</svg>
+  const screens = document.querySelectorAll(".screen");
 
-<!-- ===== LOADING ===== -->
-<div id="screen-loading" class="screen active center">
-  <div class="glass loading-box">
-    <span class="loading-text">LOADING</span>
-  </div>
-  <div class="creator">created by <b>711 GROUP</b></div>
-</div>
+  const show = (id) => {
+    screens.forEach(s => s.classList.remove("active"));
+    const el = document.getElementById(id);
+    if (el) el.classList.add("active");
+  };
 
-<!-- ===== LANGUAGE ===== -->
-<div id="screen-lang" class="screen center">
-  <div class="glass card">
-    <h2>Язык</h2>
-    <button onclick="setLang('ru')">Русский</button>
-    <button onclick="setLang('uz')">O‘zbek</button>
-    <button onclick="setLang('uzk')">Ўзбекча</button>
-  </div>
-</div>
+  const user = {
+    lang: null,
+    name: null,
+    phone: null,
+    role: null
+  };
 
-<!-- ===== PROFILE INPUT ===== -->
-<div id="screen-profile-input" class="screen center">
-  <div class="glass card">
-    <h2>О себе</h2>
-    <input id="name" placeholder="Имя">
-    <input id="phone" placeholder="Телефон">
-    <button onclick="saveProfile()">Продолжить</button>
-  </div>
-</div>
+  let currentTab = "driver";
+  const points = {};
 
-<!-- ===== ROLE ===== -->
-<div id="screen-role" class="screen center">
-  <div class="glass card">
-    <h2>Кто вы?</h2>
-    <button onclick="setRole('driver')">🚕 Водитель</button>
-    <button onclick="setRole('client')">👤 Клиент</button>
-  </div>
-</div>
+  // ===== START =====
+  setTimeout(() => show("screen-lang"), 1200);
 
-<!-- ===== MAIN ===== -->
-<div id="screen-main" class="screen">
-  <h1 class="title">Ingichka Taksi</h1>
+  // ===== STEP FUNCTIONS =====
+  window.setLang = (lang) => {
+    user.lang = lang;
+    show("screen-profile-input");
+  };
 
-  <div class="tabs glass">
-    <button onclick="switchTab('driver')">🚕 Водители</button>
-    <button onclick="switchTab('client')">👤 Клиенты</button>
-  </div>
+  window.saveProfile = () => {
+    user.name = document.getElementById("name").value;
+    user.phone = document.getElementById("phone").value;
+    show("screen-role");
+  };
 
-  <div id="ads"></div>
+  window.setRole = (role) => {
+    user.role = role;
+    show("screen-main");
+    loadAds();
+  };
 
-  <!-- Bottom menu -->
-  <div class="bottom-menu glass">
-    <button onclick="goAds()"><svg><use href="#icon-home"/></svg></button>
-    <button onclick="openForm()"><svg><use href="#icon-plus"/></svg></button>
-    <button onclick="goProfile()"><svg><use href="#icon-user"/></svg></button>
-    <button onclick="goSettings()"><svg><use href="#icon-settings"/></svg></button>
-  </div>
-</div>
+  // ===== NAV =====
+  window.goMain = () => show("screen-main");
+  window.goAds = () => show("screen-main");
+  window.openForm = () => show("screen-form");
+  window.goSettings = () => show("screen-settings");
 
-<!-- ===== FORM ===== -->
-<div id="screen-form" class="screen center">
-  <div class="glass card">
-    <h2>Объявление</h2>
-    <select id="mode">
-      <option value="now">🚀 Сразу еду</option>
-      <option value="wait">👥 Жду 4</option>
-      <option value="later">⏳ Через 20–30 мин</option>
-    </select>
-    <input id="route" placeholder="Маршрут">
-    <input id="price" placeholder="Цена">
-    <input id="seats" placeholder="Места">
-    <input id="car" placeholder="Машина">
-    <textarea id="comment" placeholder="Комментарий"></textarea>
-    <button onclick="publishAd()">Опубликовать</button>
-    <button class="ghost" onclick="goMain()">Отмена</button>
-  </div>
-</div>
+  window.goProfile = () => {
+    document.getElementById("p-name").innerText = user.name;
+    document.getElementById("p-phone").innerText = user.phone;
+    document.getElementById("p-role").innerText = user.role;
+    document.getElementById("p-points").innerText = points[user.phone] || 0;
+    show("screen-profile-view");
+  };
 
-<!-- ===== PROFILE ===== -->
-<div id="screen-profile-view" class="screen center">
-  <div class="glass card">
-    <h2>Профиль</h2>
-    <p><b>Имя:</b> <span id="p-name"></span></p>
-    <p><b>Телефон:</b> <span id="p-phone"></span></p>
-    <p><b>Роль:</b> <span id="p-role"></span></p>
-    <p><b>⭐ Рейтинг:</b> <span id="p-points">0</span></p>
-    <button onclick="goMain()">Назад</button>
-  </div>
-</div>
+  // ===== TABS =====
+  window.switchTab = (tab) => {
+    currentTab = tab;
+    loadAds();
+  };
 
-<!-- ===== SETTINGS ===== -->
-<div id="screen-settings" class="screen center">
-  <div class="glass card">
-    <h2>Настройки</h2>
-    <button onclick="show('screen-lang')">🌍 Язык</button>
-    <button>🔔 Уведомления</button>
-    <button>❓ Поддержка</button>
-    <button>💛 Поддержать проект</button>
-    <button onclick="goMain()">Назад</button>
-  </div>
-</div>
+  // ===== LOAD ADS =====
+  const loadAds = () => {
+    const box = document.getElementById("ads");
+    if (!box) return;
 
-<script src="app.js"></script>
-</body>
-</html>
+    box.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div>`;
+
+    fetch(API + "/api/ads")
+      .then(r => r.json())
+      .then(data => {
+        box.innerHTML = "";
+        const list = data.filter(a => a.role === currentTab);
+
+        if (!list.length) {
+          box.innerHTML = "<p>Нет объявлений</p>";
+          return;
+        }
+
+        list.forEach(a => {
+          const card = document.createElement("div");
+          card.className = "glass card";
+
+          const p = points[a.phone] || 0;
+
+          card.innerHTML = `
+            <b>${a.route}</b><br>
+            💰 ${a.price} | 👥 ${a.seats}<br>
+            <a href="tel:${a.phone}">📞 ${a.phone}</a>
+            <div class="like">
+              <button onclick="like('${a.phone}')">
+                ❤️
+              </button>
+              <span>${p}</span>
+            </div>
+          `;
+          box.appendChild(card);
+        });
+      })
+      .catch(() => {
+        box.innerHTML = "<p>Ошибка загрузки</p>";
+      });
+  };
+
+  // ===== LIKE =====
+  window.like = (phone) => {
+    points[phone] = (points[phone] || 0) + 1;
+    loadAds();
+  };
+
+  // ===== PUBLISH =====
+  window.publishAd = () => {
+    fetch(API + "/api/ads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: user.role,
+        route: document.getElementById("route").value,
+        price: document.getElementById("price").value,
+        seats: document.getElementById("seats").value,
+        phone: user.phone,
+        mode: document.getElementById("mode").value,
+        car: document.getElementById("car").value,
+        comment: document.getElementById("comment").value
+      })
+    }).then(() => {
+      show("screen-main");
+      loadAds();
+    });
+  };
+});
+
