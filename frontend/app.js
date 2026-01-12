@@ -102,3 +102,42 @@ function selectRole(role) {
   localStorage.setItem("role", role);
   showScreen("screen-profile");
 }
+console.log("APP JS LOADED");
+
+// === SCREEN SYSTEM ===
+const screens = document.querySelectorAll(".screen");
+
+function showScreen(id) {
+  console.log("Switch to:", id);
+
+  screens.forEach(s => s.classList.remove("active"));
+
+  const target = document.getElementById(id);
+  if (!target) {
+    console.error("Screen not found:", id);
+    return;
+  }
+
+  target.classList.add("active");
+}
+
+// === LANGUAGE ===
+document.querySelectorAll(".lang-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const lang = btn.dataset.lang;
+    localStorage.setItem("lang", lang);
+    showScreen("screen-role");
+  });
+});
+
+// === ROLE ===
+function selectRole(role) {
+  console.log("ROLE SELECTED:", role);
+  localStorage.setItem("role", role);
+  showScreen("screen-profile");
+}
+
+// === INIT ===
+document.addEventListener("DOMContentLoaded", () => {
+  showScreen("screen-language");
+});
