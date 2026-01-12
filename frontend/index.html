@@ -2,98 +2,27 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ingichka Taksi</title>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<!-- LOADING -->
-<div id="loading-screen" class="screen center">
-  <div class="loading-box">
-    <div class="loading-text">LOADING</div>
-    <div class="loading-sub">created by 711 GROUP</div>
+<div id="app">
+  <div id="content"></div>
+
+  <div id="tabbar">
+    <button onclick="navigate('home')">🏠</button>
+    <button onclick="navigate('ads')">📢</button>
+    <button onclick="navigate('notifications')">
+      🔔 <span id="notif-badge"></span>
+    </button>
+    <button onclick="navigate('profile')">👤</button>
+    <button onclick="navigate('donate')">💛</button>
   </div>
-</div>
-
-<!-- LANGUAGE -->
-<div id="lang-screen" class="screen hidden center">
-  <div class="glass-card">
-    <h1>Выберите язык</h1>
-    <button class="glass-btn" onclick="setLang('ru')">Русский</button>
-    <button class="glass-btn" onclick="setLang('uz')">O‘zbek</button>
-    <button class="glass-btn" onclick="setLang('uzk')">Ўзбекча</button>
-  </div>
-</div>
-
-<!-- ROLE -->
-<div id="role-screen" class="screen hidden center">
-  <div class="glass-card">
-    <h1>Выберите роль</h1>
-    <button class="glass-btn" onclick="selectRole('driver')">🚕 Я водитель</button>
-    <button class="glass-btn" onclick="selectRole('client')">👤 Я клиент</button>
-  </div>
-</div>
-
-<!-- PROFILE FORM -->
-<div id="profile-form-screen" class="screen hidden center">
-  <div class="glass-card">
-    <h1>Профиль</h1>
-    <input id="pf-name" placeholder="Имя и фамилия">
-    <input id="pf-phone" placeholder="+998 90 000 00 00">
-    <input id="pf-car" placeholder="Номер машины (если водитель)">
-    <button class="glass-btn" onclick="saveProfile()">Продолжить</button>
-  </div>
-</div>
-
-<!-- MAIN -->
-<div id="main-screen" class="screen hidden center">
-  <div class="glass-card">
-    <h1>Ingichka Taksi</h1>
-    <p>Найдите поездку или пассажира</p>
-  </div>
-</div>
-
-<!-- ADS -->
-<div id="ads-screen" class="screen hidden">
-  <div class="glass-card full">
-    <h1>Объявления</h1>
-
-    <div id="ads-skeleton">
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-    </div>
-
-    <div id="ads-list" class="hidden"></div>
-  </div>
-</div>
-
-<!-- PROFILE VIEW -->
-<div id="profile-view-screen" class="screen hidden center">
-  <div class="glass-card profile">
-    <div class="avatar">
-      <img src="https://i.imgur.com/6VBx3io.png">
-    </div>
-    <h2 id="profile-name"></h2>
-    <div class="rating">
-      ⭐ <span id="profile-rating">0.0</span>
-      <span id="profile-points">(0)</span>
-    </div>
-    <div class="info"><span>📞</span><b id="profile-phone"></b></div>
-    <div class="info"><span>🚗</span><b id="profile-car"></b></div>
-  </div>
-</div>
-
-<!-- BOTTOM NAV -->
-<div id="bottom-nav" class="bottom-nav hidden">
-  <button onclick="navTo('main')">🏠</button>
-  <button onclick="navTo('ads')">📢</button>
-  <button onclick="navTo('profile')">👤</button>
 </div>
 
 <script src="app.js"></script>
 </body>
 </html>
-
 
