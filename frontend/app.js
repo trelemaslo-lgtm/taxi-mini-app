@@ -1,8 +1,10 @@
 document.addEventListener("DOMContentLoaded", () => {
   const API = "https://taxi-backend-5kl2.onrender.com";
-  const tg = window.Telegram.WebApp;
-  tg.expand();
+  const tg = window.Telegram?.WebApp;
+  if (tg) tg.expand();
 
+  const loader = document.getElementById("loader");
+  const app = document.getElementById("app");
   const screens = document.querySelectorAll(".screen");
 
   function show(id) {
@@ -11,38 +13,52 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.classList.add("active");
   }
 
-  const user = { lang:null, name:null, phone:null, role:null };
+  // ===== INIT =====
+  setTimeout(() => {
+    if (loader) loader.style.display = "none";
+    if (app) app.style.display = "block";
+    show("screen-lang");
+  }, 900);
+
+  // ===== STATE =====
+  const user = {
+    lang: null,
+    name: null,
+    phone: null,
+    role: null
+  };
+
   let currentTab = "driver";
   const points = {};
 
-  /* ===== START ===== */
-  setTimeout(() => show("screen-lang"), 1200);
-
-  /* ===== STEPS ===== */
+  // ===== LANGUAGE =====
   window.setLang = (lang) => {
     user.lang = lang;
     show("screen-profile-input");
   };
 
+  // ===== PROFILE =====
   window.saveProfile = () => {
-    const nameInput = document.getElementById("name");
-    const phoneInput = document.getElementById("phone");
-    if (!nameInput || !phoneInput) return;
-
-    user.name = nameInput.value;
-    user.phone = phoneInput.value;
+    const name = document.getElementById("name")?.value;
+    const phone = document.getElementById("phone")?.value;
+    if (!name || !phone) {
+      alert("Введите имя и телефон");
+      return;
+    }
+    user.name = name;
+    user.phone = phone;
     show("screen-role");
   };
 
+  // ===== ROLE =====
   window.setRole = (role) => {
     user.role = role;
     show("screen-main");
     loadAds();
   };
 
-  /* ===== NAV ===== */
+  // ===== NAV =====
   window.goMain = () => show("screen-main");
-  window.goAds = () => show("screen-main");
   window.openForm = () => show("screen-form");
   window.goSettings = () => show("screen-settings");
 
@@ -54,11 +70,13 @@ document.addEventListener("DOMContentLoaded", () => {
     show("screen-profile-view");
   };
 
+  // ===== TABS =====
   window.switchTab = (tab) => {
     currentTab = tab;
     loadAds();
   };
 
+  // ===== LOAD ADS =====
   function loadAds() {
     const box = document.getElementById("ads");
     if (!box) return;
@@ -75,7 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const list = data.filter(a => a.role === currentTab);
 
         if (!list.length) {
-          box.innerHTML = "<p>Нет объявлений</p>";
+          box.innerHTML = "<p>Пока нет объявлений</p>";
           return;
         }
 
@@ -83,15 +101,16 @@ document.addEventListener("DOMContentLoaded", () => {
           const card = document.createElement("div");
           card.className = "glass card";
 
-          const likes = points[a.phone] || 0;
+          const likeCount = points[a.phone] || 0;
 
           card.innerHTML = `
             <b>${a.route}</b><br>
             💰 ${a.price} | 👥 ${a.seats}<br>
-            <a href="tel:${a.phone}">📞 ${a.phone}</a>
+            🚗 ${a.car || "-"}<br>
+            📞 <a href="tel:${a.phone}">${a.phone}</a>
             <div class="like">
               <button onclick="like('${a.phone}')">❤️</button>
-              <span>${likes}</span>
+              <span>${likeCount}</span>
             </div>
           `;
           box.appendChild(card);
@@ -102,29 +121,36 @@ document.addEventListener("DOMContentLoaded", () => {
       });
   }
 
+  // ===== LIKE =====
   window.like = (phone) => {
     points[phone] = (points[phone] || 0) + 1;
     loadAds();
   };
 
+  // ===== PUBLISH =====
   window.publishAd = () => {
+    const payload = {
+      role: user.role,
+      route: document.getElementById("route")?.value,
+      price: document.getElementById("price")?.value,
+      seats: document.getElementById("seats")?.value,
+      phone: user.phone,
+      mode: document.getElementById("mode")?.value,
+      car: document.getElementById("car")?.value,
+      comment: document.getElementById("comment")?.value
+    };
+
     fetch(API + "/api/ads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        role: user.role,
-        route: document.getElementById("route").value,
-        price: document.getElementById("price").value,
-        seats: document.getElementById("seats").value,
-        phone: user.phone,
-        mode: document.getElementById("mode").value,
-        car: document.getElementById("car").value,
-        comment: document.getElementById("comment").value
+      body: JSON.stringify(payload)
+    })
+      .then(() => {
+        show("screen-main");
+        loadAds();
       })
-    }).then(() => {
-      show("screen-main");
-      loadAds();
-    });
+      .catch(() => {
+        alert("Ошибка публикации");
+      });
   };
 });
-
