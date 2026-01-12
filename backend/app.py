@@ -1,130 +1,102 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
-import time, math, os
-
-from db import Session, Ad, Like, init_db
-
-ADMIN_ID = os.getenv("ADMIN_ID")  # твой Telegram ID
 
 app = Flask(__name__)
 CORS(app)
-init_db()
 
-def distance(lat1, lon1, lat2, lon2):
-    R = 6371
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dl/2)**2
-    return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1-a)))
+ADMIN_ID = 6813692852  # ← ВСТАВЬ СВОЙ TELEGRAM ID
+
+ads = []
+banned = set()
+stats = {
+    "users": set(),
+    "drivers": set(),
+    "clients": set(),
+    "ads_total": 0,
+    "likes": 0,
+    "donations": []
+}
+
+ad_id_counter = 1
 
 @app.route("/")
 def home():
-    return "Backend is working"
+    return "BACKEND IS WORKING"
 
-@app.route("/api/ads", methods=["GET"])
-def get_ads():
-    session = Session()
-    now = time.time()
+@app.route("/api/ads", methods=["GET", "POST"])
+def handle_ads():
+    global ad_id_counter
 
-    user_lat = request.args.get("lat", type=float)
-    user_lon = request.args.get("lon", type=float)
+    if request.method == "POST":
+        data = request.json
+        if data.get("phone") in banned:
+            abort(403)
 
-    result = []
-    for ad in session.query(Ad).all():
-        lifetime = 900 if ad.mode == "now" else 1800
-        if now - ad.created_at < lifetime:
-            dist = None
-            if user_lat and ad.lat:
-                dist = round(distance(user_lat, user_lon, ad.lat, ad.lon), 2)
+        ad = {
+            "id": ad_id_counter,
+            "role": data.get("role"),
+            "route": data.get("route"),
+            "time": data.get("time"),
+            "seats": data.get("seats"),
+            "price": data.get("price"),
+            "phone": data.get("phone"),
+            "comment": data.get("comment"),
+            "lat": data.get("lat"),
+            "lng": data.get("lng")
+        }
+        ads.append(ad)
+        ad_id_counter += 1
+        stats["ads_total"] += 1
+        return jsonify(ad)
 
-            result.append({
-                "id": ad.id,
-                "role": ad.role,
-                "name": ad.name,
-                "phone": ad.phone,
-                "route": ad.route,
-                "mode": ad.mode,
-                "price": ad.price,
-                "seats": ad.seats,
-                "comment": ad.comment,
-                "points": ad.points,
-                "distance": dist
-            })
+    return jsonify(ads)
 
-    session.close()
+@app.route("/api/admin/ad/<int:ad_id>", methods=["DELETE"])
+def delete_ad(ad_id):
+    if request.args.get("admin_id") != str(ADMIN_ID):
+        abort(403)
+    global ads
+    ads = [a for a in ads if a["id"] != ad_id]
+    return {"status": "deleted"}
 
-    result.sort(key=lambda x: (
-        x["mode"] != "now",
-        x["distance"] if x["distance"] is not None else 9999,
-        -x["points"]
-    ))
+@app.route("/api/admin/ban", methods=["POST"])
+def ban_user():
+    if request.json.get("admin_id") != ADMIN_ID:
+        abort(403)
+    banned.add(request.json.get("phone"))
+    return {"status": "banned"}
 
-    return jsonify(result)
+@app.route("/api/stats/visit", methods=["POST"])
+def stat_visit():
+    user_id = request.json.get("user_id")
+    role = request.json.get("role")
+    stats["users"].add(user_id)
+    if role == "driver":
+        stats["drivers"].add(user_id)
+    if role == "client":
+        stats["clients"].add(user_id)
+    return {"ok": True}
 
-@app.route("/api/ads", methods=["POST"])
-def create_ad():
-    data = request.json
-    session = Session()
+@app.route("/api/stats/donate", methods=["POST"])
+def stat_donate():
+    amount = request.json.get("amount")
+    stats["donations"].append(amount)
+    return {"ok": True}
 
-    ad = Ad(
-        role=data["role"],
-        name=data["name"],
-        phone=data["phone"],
-        route=data["route"],
-        mode=data["mode"],
-        price=data.get("price",""),
-        seats=data.get("seats",0),
-        comment=data.get("comment",""),
-        lat=data.get("lat"),
-        lon=data.get("lon"),
-        created_at=time.time(),
-        points=0
-    )
-
-    session.add(ad)
-    session.commit()
-    session.close()
-    return jsonify({"status":"ok"})
-
-@app.route("/api/like", methods=["POST"])
-def like():
-    data = request.json
-    session = Session()
-
-    ad = session.get(Ad, data["ad_id"])
-    if not ad:
-        return jsonify({"error":"not found"}), 404
-
-    exists = session.query(Like).filter_by(
-        ad_id=ad.id,
-        user_id=data["user_id"]
-    ).first()
-
-    if exists:
-        return jsonify({"status":"already liked"})
-
-    session.add(Like(ad_id=ad.id, user_id=data["user_id"]))
-    ad.points += 1
-    session.commit()
-    session.close()
-
-    return jsonify({"status":"liked","points":ad.points})
-
-@app.route("/api/admin/delete", methods=["POST"])
-def admin_delete():
-    data = request.json
-    if str(data.get("admin_id")) != str(ADMIN_ID):
-        return jsonify({"error":"forbidden"}), 403
-
-    session = Session()
-    ad = session.get(Ad, data["ad_id"])
-    if ad:
-        session.delete(ad)
-        session.commit()
-    session.close()
-
-    return jsonify({"status":"deleted"})
+@app.route("/api/admin/stats")
+def get_stats():
+    if request.args.get("admin_id") != str(ADMIN_ID):
+        abort(403)
+    return {
+        "users": len(stats["users"]),
+        "drivers": len(stats["drivers"]),
+        "clients": len(stats["clients"]),
+        "ads_total": stats["ads_total"],
+        "likes": stats["likes"],
+        "donations_sum": sum(stats["donations"]),
+        "donations_count": len(stats["donations"])
+    }
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run()
+
