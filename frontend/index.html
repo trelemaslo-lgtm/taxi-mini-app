@@ -1,28 +1,98 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uz">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>Ingichka Taksi</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-<div id="app">
-  <div id="content"></div>
+<div id="noise"></div>
 
-  <div id="tabbar">
-    <button onclick="navigate('home')">🏠</button>
-    <button onclick="navigate('ads')">📢</button>
-    <button onclick="navigate('notifications')">
-      🔔 <span id="notif-badge"></span>
-    </button>
-    <button onclick="navigate('profile')">👤</button>
-    <button onclick="navigate('donate')">💛</button>
-  </div>
+<div id="app">
+
+  <!-- LOADING -->
+  <section id="loading" class="screen active">
+    <div class="road">
+      <div class="car">
+        <div class="headlights"></div>
+        <div class="shadow"></div>
+      </div>
+    </div>
+    <div class="loading-text" id="loadingText">Yuklanmoqda…</div>
+    <div class="created">created by 711 GROUP</div>
+  </section>
+
+  <!-- LANGUAGE -->
+  <section id="language" class="screen">
+    <h2 data-i18n="lang_title"></h2>
+    <button onclick="setLang('uz')">O‘zbek</button>
+    <button onclick="setLang('ru')">Русский</button>
+    <button onclick="setLang('uzk')">Ўзбекча</button>
+  </section>
+
+  <!-- ROLE -->
+  <section id="role" class="screen">
+    <h2 data-i18n="role_title"></h2>
+    <button onclick="setRole('driver')">🚕 <span data-i18n="driver"></span></button>
+    <button onclick="setRole('client')">👤 <span data-i18n="client"></span></button>
+  </section>
+
+  <!-- PROFILE SETUP -->
+  <section id="profileSetup" class="screen">
+    <h2 data-i18n="profile_title"></h2>
+    <input id="name" data-i18n-ph="name"/>
+    <input id="phone" data-i18n-ph="phone"/>
+    <input id="car" data-i18n-ph="car"/>
+    <button onclick="saveProfile()" data-i18n="continue"></button>
+  </section>
+
+  <!-- HOME -->
+  <section id="home" class="screen">
+    <h2 data-i18n="ads"></h2>
+    <div id="adsList"></div>
+  </section>
+
+  <!-- PROFILE -->
+  <section id="profile" class="screen">
+    <div class="profile-card">
+      <div class="avatar"></div>
+      <h3 id="pName"></h3>
+      <p id="pPhone"></p>
+      <p id="pCar"></p>
+      <p>⭐ <span id="pRating">5</span></p>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="settings" class="screen">
+    <h2 data-i18n="settings"></h2>
+    <button onclick="go('language')" data-i18n="language"></button>
+    <button data-i18n="notifications"></button>
+    <button data-i18n="donate"></button>
+    <button onclick="go('about')" data-i18n="about"></button>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about" class="screen">
+    <div class="about-card">
+      <h2>Ingichka Taksi</h2>
+      <p data-i18n="about_text"></p>
+      <div class="created">created by 711 GROUP</div>
+    </div>
+  </section>
+
 </div>
 
+<nav class="tabbar">
+  <button onclick="go('home')">🏠</button>
+  <button onclick="createAd()">➕</button>
+  <button onclick="go('profile')">👤</button>
+  <button onclick="go('settings')">⚙️</button>
+</nav>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
-
