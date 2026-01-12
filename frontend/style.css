@@ -35,5 +35,34 @@ body {
 /* APP */
 #app {
   display: none;
+  padding-bottom: 80px;
+}
+
+.screen {
+  display: none;
   padding: 20px;
+}
+
+.screen.active {
+  display: block;
+}
+
+/* BOTTOM NAV */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: #000;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+}
+
+.bottom-nav button {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #ffd600;
+  font-size: 20px;
 }
