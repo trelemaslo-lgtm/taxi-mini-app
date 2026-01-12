@@ -2,78 +2,33 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Ingichka Taksi</title>
+  <title>Test</title>
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    body { background:#000; color:#fff; font-family:sans-serif }
+    .screen { display:none }
+    .screen.active { display:block }
+    button { padding:12px; margin:10px; width:100% }
+  </style>
 </head>
 <body>
 
-<!-- LOADING -->
-<div id="loading">
-  <div class="loading-text">LOADING</div>
-  <div class="loading-sub">created by 711 GROUP</div>
-</div>
+<section id="screen-language" class="screen active">
+  <h1>Выбор языка</h1>
+  <button class="lang-btn" data-lang="uz">O‘zbek</button>
+  <button class="lang-btn" data-lang="ru">Русский</button>
+</section>
 
-<!-- APP -->
-<div id="app">
-
-  <!-- LANGUAGE -->
-  <section id="screen-language" class="screen">
-    <h1 data-i18n="choose_lang">Tilni tanlang</h1>
-    <button class="lang-btn" data-lang="uz">O‘zbek</button>
-    <button class="lang-btn" data-lang="ru">Русский</button>
-    <button class="lang-btn" data-lang="uzk">Ўзбекча</button>
-  </section>
-
-  <!-- SCREEN: ROLE -->
-<div class="screen" id="screen-role">
+<section id="screen-role" class="screen">
   <h1>Выберите роль</h1>
+  <button onclick="selectRole('driver')">🚕 Я водитель</button>
+  <button onclick="selectRole('client')">👤 Я клиент</button>
+</section>
 
-  <button class="main-btn" onclick="selectRole('driver')">
-    🚕 Я ВОДИТЕЛЬ
-  </button>
+<section id="screen-profile" class="screen">
+  <h1>Профиль</h1>
+</section>
 
-  <button class="main-btn" onclick="selectRole('client')">
-    👤 Я КЛИЕНТ
-  </button>
-</div>
-
-  <!-- HOME -->
-  <section id="screen-home" class="screen">
-    <h1 data-i18n="home">Home</h1>
-    <p data-i18n="home_desc">Главный экран</p>
-  </section>
-
-  <!-- ADD -->
-  <section id="screen-add" class="screen">
-    <h1 data-i18n="add">Add</h1>
-    <p data-i18n="add_desc">Экран добавления</p>
-  </section>
-
-  <!-- PROFILE -->
-  <section id="screen-profile" class="screen">
-    <h1 data-i18n="profile">Profile</h1>
-    <p data-i18n="profile_desc">Экран профиля</p>
-  </section>
-
-  <!-- SETTINGS -->
-  <section id="screen-settings" class="screen">
-    <h1 data-i18n="settings">Settings</h1>
-    <p data-i18n="settings_desc">Экран настроек</p>
-  </section>
-
-  <!-- BOTTOM NAV -->
-  <nav class="bottom-nav">
-    <button id="btn-home">🏠</button>
-    <button id="btn-add">➕</button>
-    <button id="btn-profile">👤</button>
-    <button id="btn-settings">⚙️</button>
-  </nav>
-
-</div>
-
-<script src="app.js"></script>
+<script src="app.js" defer></script>
 </body>
 </html>
