@@ -1,113 +1,95 @@
-// ================================
-// TELEGRAM INIT
-// ================================
+const API = "https://taxi-backend-5kl2.onrender.com";
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// ================================
-// CONFIG
-// ================================
-const API = "https://taxi-backend-5kl2.onrender.com"; // НЕ МЕНЯЙ, если backend тут
+let user = { lang:null, name:null, phone:null, role:null };
+let currentTab = "driver";
+let points = {}; // local likes
 
-// ================================
-// DOM
-// ================================
-const loader = document.getElementById("loader");
-const app = document.getElementById("app");
-const adsBox = document.getElementById("ads");
-const btnDrivers = document.getElementById("btnDrivers");
-const btnClients = document.getElementById("btnClients");
-
-// ================================
-// STATE
-// ================================
-let currentTab = "client";
-
-// ================================
-// START
-// ================================
-document.addEventListener("DOMContentLoaded", () => {
-  // показать приложение
-  if (app) app.style.display = "block";
-
-  // скрыть loader гарантированно
-  setTimeout(hideLoader, 1000);
-
-  // кнопки
-  if (btnDrivers) btnDrivers.onclick = () => switchTab("driver");
-  if (btnClients) btnClients.onclick = () => switchTab("client");
-
-  // загрузка объявлений
-  loadAds();
-});
-
-// ================================
-// LOADER
-// ================================
-function hideLoader() {
-  if (!loader) return;
-  loader.style.opacity = "0";
-  setTimeout(() => {
-    loader.style.display = "none";
-  }, 400);
+function show(id){
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
 }
 
-// ================================
-// TABS
-// ================================
-function switchTab(role) {
-  currentTab = role;
+/* Loading */
+setTimeout(()=>show("screen-lang"),1200);
 
-  if (btnDrivers) btnDrivers.classList.toggle("active", role === "driver");
-  if (btnClients) btnClients.classList.toggle("active", role === "client");
-
-  loadAds();
+/* Steps */
+function setLang(l){ user.lang=l; show("screen-profile-input"); }
+function saveProfile(){
+  user.name = name.value;
+  user.phone = phone.value;
+  show("screen-role");
 }
+function setRole(r){ user.role=r; show("screen-main"); loadAds(); }
 
-// ================================
-// LOAD ADS
-// ================================
-function loadAds() {
-  adsBox.innerHTML = `<p style="opacity:.6;text-align:center">Загрузка...</p>`;
+/* Navigation */
+function goMain(){ show("screen-main"); }
+function goAds(){ show("screen-main"); }
+function goProfile(){
+  p-name.innerText=user.name;
+  p-phone.innerText=user.phone;
+  p-role.innerText=user.role;
+  p-points.innerText = points[user.phone]||0;
+  show("screen-profile-view");
+}
+function goSettings(){ show("screen-settings"); }
+function openForm(){ show("screen-form"); }
 
-  fetch(API + "/api/ads")
-    .then(r => r.json())
-    .then(data => {
-      adsBox.innerHTML = "";
+/* Tabs */
+function switchTab(t){ currentTab=t; loadAds(); }
 
-      const list = data.filter(a => a.role === currentTab);
+/* Load ads */
+function loadAds(){
+  const box = ads;
+  box.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div>`;
 
-      if (list.length === 0) {
-        adsBox.innerHTML = `
-          <p style="opacity:.5;text-align:center;margin-top:40px">
-            Пока нет объявлений
-          </p>
+  fetch(API+"/api/ads")
+    .then(r=>r.json())
+    .then(data=>{
+      box.innerHTML="";
+      data.filter(a=>a.role===currentTab).forEach(a=>{
+        const card=document.createElement("div");
+        card.className="glass card";
+        const p = points[a.phone]||0;
+        card.innerHTML=`
+          <b>${a.route}</b><br>
+          💰 ${a.price} | 👥 ${a.seats}<br>
+          <a href="tel:${a.phone}">📞 ${a.phone}</a>
+          <div class="like">
+            <button onclick="like('${a.phone}')">
+              <svg width="16" height="16"><use href="#icon-heart"/></svg>
+            </button>
+            <span>${p}</span>
+          </div>
         `;
-        return;
-      }
-
-      list.forEach(a => {
-        const card = document.createElement("div");
-        card.className = "glass card";
-        card.innerHTML = `
-          <b>${a.role === "driver" ? "🚕 Водитель" : "👤 Клиент"}</b><br>
-          <small>${a.route || "-"}</small><br>
-          ⏰ ${a.time || "-"}<br>
-          💰 ${a.price || "-"} | 👥 ${a.seats || "-"}<br>
-          <a href="tel:${a.phone}" style="display:inline-block;margin-top:6px">
-            📞 ${a.phone}
-          </a>
-        `;
-        adsBox.appendChild(card);
+        box.appendChild(card);
       });
-    })
-    .catch(err => {
-      console.error(err);
-      adsBox.innerHTML = `
-        <p style="color:#ff6b6b;text-align:center">
-          Ошибка загрузки данных
-        </p>
-      `;
+      if(!box.innerHTML) box.innerHTML="<p>Нет объявлений</p>";
     });
+}
+
+/* Like */
+function like(phone){
+  points[phone]=(points[phone]||0)+1;
+  loadAds();
+}
+
+/* Publish */
+function publishAd(){
+  fetch(API+"/api/ads",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({
+      role:user.role,
+      route:route.value,
+      price:price.value,
+      seats:seats.value,
+      phone:user.phone,
+      mode:mode.value,
+      car:car.value,
+      comment:comment.value
+    })
+  }).then(()=>{ goMain(); loadAds(); });
 }
 
