@@ -1,244 +1,39 @@
-/* ======================================
-   INGICHKA TAKSI — MONSTER STYLE.CSS
-   Safe / Visible / Glass Base
-====================================== */
-
-/* ---------- CSS VARIABLES ---------- */
-:root {
-  --bg-main: #0b0b0b;
-  --bg-dark: #000000;
-
-  --glass-bg: rgba(255, 214, 0, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.18);
-
-  --text-main: rgba(255, 255, 255, 0.95);
-  --text-secondary: rgba(255, 255, 255, 0.75);
-  --text-muted: rgba(255, 255, 255, 0.45);
-
-  --accent: #ffd600;
-
-  --radius-xl: 22px;
-  --radius-lg: 18px;
-  --radius-md: 14px;
-
-  --blur-strong: blur(22px);
-  --blur-medium: blur(16px);
-}
-
-/* ---------- RESET ---------- */
 * {
   box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
-}
-
-html, body {
-  width: 100%;
-  height: 100%;
 }
 
 body {
   margin: 0;
-  background: radial-gradient(circle at top, #1a1a1a, #000);
-  color: var(--text-main);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  overflow-x: hidden;
+  height: 100vh;
+  background: #000;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* ---------- TEXT ---------- */
-h1, h2, h3 {
-  margin: 0 0 12px;
-  color: var(--text-main);
-  font-weight: 600;
-}
-
-p {
-  margin: 6px 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
-small {
-  color: var(--text-muted);
-}
-
-/* ---------- LOADER ---------- */
-#loader {
+/* LOADING */
+#loading {
   position: fixed;
   inset: 0;
   background: #000;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  z-index: 9999;
+  justify-content: center;
 }
 
-#loader .loading-text {
+.loading-text {
   font-size: 22px;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 10px;
-  letter-spacing: 1px;
+  color: #ffd600;
+  margin-bottom: 8px;
 }
 
-#loader .created {
+.loading-sub {
   font-size: 12px;
-  color: var(--text-muted);
+  opacity: 0.6;
 }
 
-/* ---------- APP ---------- */
+/* APP */
 #app {
   display: none;
-  min-height: 100vh;
-  padding-bottom: 90px;
-}
-
-/* ---------- SCREENS ---------- */
-.screen {
-  display: none;
-  padding: 16px;
-}
-
-.screen h2 {
-  margin-bottom: 16px;
-}
-
-/* ---------- INPUTS ---------- */
-input {
-  width: 100%;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--glass-border);
-  background: rgba(255,255,255,0.08);
-  backdrop-filter: var(--blur-medium);
-  color: var(--text-main);
-  font-size: 15px;
-}
-
-input::placeholder {
-  color: var(--text-muted);
-}
-
-/* ---------- BUTTONS ---------- */
-button {
-  cursor: pointer;
-}
-
-button.primary {
-  width: 100%;
-  padding: 15px;
-  border-radius: var(--radius-lg);
-  border: none;
-  background: linear-gradient(
-    180deg,
-    rgba(255,214,0,0.95),
-    rgba(255,214,0,0.8)
-  );
-  color: #000;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-button.primary:active {
-  transform: scale(0.98);
-}
-
-/* ---------- AD CARDS ---------- */
-.ad-card {
-  background: linear-gradient(
-    180deg,
-    rgba(255,214,0,0.18),
-    rgba(255,214,0,0.06)
-  );
-  backdrop-filter: var(--blur-strong);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xl);
-  padding: 14px;
-  margin-bottom: 14px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-  color: var(--text-main);
-}
-
-.ad-card b {
-  font-size: 15px;
-  color: var(--text-main);
-}
-
-.ad-card a {
-  color: var(--accent);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-/* ---------- PROFILE ---------- */
-#screen-profile {
-  text-align: center;
-}
-
-#screen-profile input {
-  text-align: left;
-}
-
-#screen-profile hr {
-  border: none;
-  height: 1px;
-  background: rgba(255,255,255,0.15);
-}
-
-/* ---------- SETTINGS ---------- */
-#screen-settings p {
-  padding: 14px;
-  border-radius: var(--radius-md);
-  background: rgba(255,255,255,0.06);
-  backdrop-filter: var(--blur-medium);
-  border: 1px solid var(--glass-border);
-  margin-bottom: 10px;
-}
-
-/* ---------- BOTTOM NAV ---------- */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 70px;
-  display: flex;
-  background: rgba(0,0,0,0.85);
-  backdrop-filter: var(--blur-strong);
-  border-top: 1px solid rgba(255,255,255,0.12);
-  z-index: 1000;
-}
-
-.bottom-nav button {
-  flex: 1;
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 22px;
-}
-
-.bottom-nav button:active {
-  transform: scale(0.9);
-}
-
-/* ---------- SAFE GUARDS ---------- */
-.hidden {
-  display: none !important;
-}
-
-/* ---------- ANIMATION BASE ---------- */
-.screen {
-  animation: fadeIn 0.25s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  padding: 20px;
 }
