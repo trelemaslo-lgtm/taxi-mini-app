@@ -25,11 +25,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!localStorage.getItem("lang")) {
       showScreen("screen-language");
-    } else if (!localStorage.getItem("role")) {
-      showScreen("screen-role");
-    } else {
-      showScreen("screen-home");
-    }
+   else if (!localStorage.getItem("role")) {
+  showScreen("screen-role");
+} else if (!localStorage.getItem("profile")) {
+  showScreen("screen-profile");
+} else {
+  showScreen("screen-home");
+}
   }, 1000);
 
   // LANGUAGE
