@@ -5,74 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ingichka Taksi</title>
 
+  <!-- Telegram Mini App -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
 
-<!-- LOADING -->
-<div id="loader" class="loader">
-  <div class="loading-text">LOADING</div>
-  <div class="brand">created by <b>711 GROUP</b></div>
-</div>
-
-<!-- APP -->
-<div id="app" class="app hidden">
-
-  <!-- HEADER -->
-  <header class="header glass">
-    🚕 <span>Ingichka Taksi</span>
-    <button class="icon" onclick="openSettings()">⚙️</button>
-  </header>
-
-  <!-- TABS -->
-  <div class="tabs glass">
-    <button onclick="switchTab('driver')" id="tab-driver">🚕 Водители</button>
-    <button onclick="switchTab('client')" id="tab-client">👤 Клиенты</button>
+<!-- ===== LOADING ===== -->
+<div id="screen-loading" class="screen active">
+  <div class="loading-box">
+    <div class="loading-text">LOADING</div>
   </div>
-
-  <!-- ADS -->
-  <div id="ads" class="ads"></div>
-
-  <!-- ADD BUTTON -->
-  <button class="add-btn" onclick="openForm()">＋</button>
+  <div class="created">created by <span>711 GROUP</span></div>
 </div>
 
-<!-- FORM -->
-<div id="form" class="modal hidden">
-  <div class="glass modal-card">
-    <h3>Новое объявление</h3>
+<!-- ===== LANGUAGE ===== -->
+<div id="screen-lang" class="screen">
+  <div class="glass card">
+    <h2>Выберите язык</h2>
+    <button onclick="setLang('ru')">Русский</button>
+    <button onclick="setLang('uz')">O‘zbek</button>
+    <button onclick="setLang('uzk')">Ўзбекча</button>
+  </div>
+</div>
 
-    <select id="role">
-      <option value="driver">Водитель</option>
-      <option value="client">Клиент</option>
-    </select>
+<!-- ===== ROLE ===== -->
+<div id="screen-role" class="screen">
+  <div class="glass card">
+    <h2>Кто вы?</h2>
+    <button onclick="setRole('driver')">🚕 Водитель</button>
+    <button onclick="setRole('client')">🧍 Клиент</button>
+  </div>
+</div>
 
-    <input id="route" placeholder="Маршрут" />
-    <input id="time" placeholder="Время" />
-    <input id="seats" placeholder="Места / режим" />
-    <input id="price" placeholder="Цена" />
+<!-- ===== PROFILE ===== -->
+<div id="screen-profile" class="screen">
+  <div class="glass card">
+    <h2>Профиль</h2>
+    <input id="name" placeholder="Имя" />
     <input id="phone" placeholder="+998..." />
-    <textarea id="comment" placeholder="Комментарий"></textarea>
-
-    <button onclick="publishAd()">Опубликовать</button>
-    <button class="secondary" onclick="closeForm()">Назад</button>
+    <button onclick="saveProfile()">Продолжить</button>
   </div>
 </div>
 
-<!-- SETTINGS -->
-<div id="settings" class="modal hidden">
-  <div class="glass modal-card">
-    <h3>Настройки</h3>
+<!-- ===== MAIN ===== -->
+<div id="screen-main" class="screen">
+  <div class="glass card">
+    <h2>🚕 Ingichka Taksi</h2>
+    <p>Главное меню</p>
 
-    <button onclick="setLang('ru')">🇷🇺 Русский</button>
-    <button onclick="setLang('uz')">🇺🇿 O‘zbek</button>
-    <button onclick="setLang('uzk')">🇺🇿 Ўзбекча</button>
-
-    <button onclick="alert('Донат скоро')">💛 Поддержать</button>
-
-    <button class="secondary" onclick="closeSettings()">Закрыть</button>
+    <button>📢 Объявления</button>
+    <button onclick="openProfile()">👤 Профиль</button>
+    <button onclick="openSettings()">⚙️ Настройки</button>
   </div>
 </div>
 
