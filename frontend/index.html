@@ -1,135 +1,91 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const API = "https://taxi-backend-5kl2.onrender.com";
-  const tg = window.Telegram.WebApp;
-  tg.expand();
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ingichka Taksi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-  const screens = document.querySelectorAll(".screen");
+<!-- LOADING -->
+<div id="loader" class="loader">
+  <div class="loading-text">LOADING</div>
+  <div class="brand">created by <b>711 GROUP</b></div>
+</div>
 
-  const show = (id) => {
-    screens.forEach(s => s.classList.remove("active"));
-    const el = document.getElementById(id);
-    if (el) el.classList.add("active");
-  };
+<!-- APP -->
+<div id="app" style="display:none">
 
-  const user = {
-    lang: null,
-    name: null,
-    phone: null,
-    role: null
-  };
+  <!-- LANGUAGE -->
+  <div class="screen active" id="screen-lang">
+    <h2>Выберите язык</h2>
+    <button onclick="setLang('ru')">Русский</button>
+    <button onclick="setLang('uz')">O‘zbek</button>
+    <button onclick="setLang('uzk')">Ўзбекча</button>
+  </div>
 
-  let currentTab = "driver";
-  const points = {};
+  <!-- PROFILE INPUT -->
+  <div class="screen" id="screen-profile-input">
+    <h2>О себе</h2>
+    <input id="name" placeholder="Имя">
+    <input id="phone" placeholder="+998...">
+    <button onclick="saveProfile()">Продолжить</button>
+  </div>
 
-  // ===== START =====
-  setTimeout(() => show("screen-lang"), 1200);
+  <!-- ROLE -->
+  <div class="screen" id="screen-role">
+    <h2>Вы</h2>
+    <button onclick="setRole('driver')">🚕 Водитель</button>
+    <button onclick="setRole('client')">👤 Клиент</button>
+  </div>
 
-  // ===== STEP FUNCTIONS =====
-  window.setLang = (lang) => {
-    user.lang = lang;
-    show("screen-profile-input");
-  };
+  <!-- MAIN -->
+  <div class="screen" id="screen-main">
+    <h2>Объявления</h2>
+    <div>
+      <button onclick="switchTab('driver')">Водители</button>
+      <button onclick="switchTab('client')">Клиенты</button>
+    </div>
+    <div id="ads"></div>
+    <button onclick="openForm()">➕ Разместить</button>
+    <button onclick="goProfile()">👤 Профиль</button>
+    <button onclick="goSettings()">⚙️ Настройки</button>
+  </div>
 
-  window.saveProfile = () => {
-    user.name = document.getElementById("name").value;
-    user.phone = document.getElementById("phone").value;
-    show("screen-role");
-  };
+  <!-- FORM -->
+  <div class="screen" id="screen-form">
+    <h2>Новое объявление</h2>
+    <input id="route" placeholder="Маршрут">
+    <input id="price" placeholder="Цена">
+    <input id="seats" placeholder="Места">
+    <input id="mode" placeholder="Сразу еду / 20-30 мин">
+    <input id="car" placeholder="Машина">
+    <textarea id="comment" placeholder="Комментарий"></textarea>
+    <button onclick="publishAd()">Опубликовать</button>
+    <button onclick="goMain()">Отмена</button>
+  </div>
 
-  window.setRole = (role) => {
-    user.role = role;
-    show("screen-main");
-    loadAds();
-  };
+  <!-- PROFILE -->
+  <div class="screen" id="screen-profile-view">
+    <h2>Профиль</h2>
+    <p id="p-name"></p>
+    <p id="p-phone"></p>
+    <p id="p-role"></p>
+    <p>⭐ Поинты: <span id="p-points"></span></p>
+    <button onclick="goMain()">Назад</button>
+  </div>
 
-  // ===== NAV =====
-  window.goMain = () => show("screen-main");
-  window.goAds = () => show("screen-main");
-  window.openForm = () => show("screen-form");
-  window.goSettings = () => show("screen-settings");
+  <!-- SETTINGS -->
+  <div class="screen" id="screen-settings">
+    <h2>Настройки</h2>
+    <button onclick="goMain()">Назад</button>
+  </div>
 
-  window.goProfile = () => {
-    document.getElementById("p-name").innerText = user.name;
-    document.getElementById("p-phone").innerText = user.phone;
-    document.getElementById("p-role").innerText = user.role;
-    document.getElementById("p-points").innerText = points[user.phone] || 0;
-    show("screen-profile-view");
-  };
+</div>
 
-  // ===== TABS =====
-  window.switchTab = (tab) => {
-    currentTab = tab;
-    loadAds();
-  };
-
-  // ===== LOAD ADS =====
-  const loadAds = () => {
-    const box = document.getElementById("ads");
-    if (!box) return;
-
-    box.innerHTML = `<div class="skeleton"></div><div class="skeleton"></div>`;
-
-    fetch(API + "/api/ads")
-      .then(r => r.json())
-      .then(data => {
-        box.innerHTML = "";
-        const list = data.filter(a => a.role === currentTab);
-
-        if (!list.length) {
-          box.innerHTML = "<p>Нет объявлений</p>";
-          return;
-        }
-
-        list.forEach(a => {
-          const card = document.createElement("div");
-          card.className = "glass card";
-
-          const p = points[a.phone] || 0;
-
-          card.innerHTML = `
-            <b>${a.route}</b><br>
-            💰 ${a.price} | 👥 ${a.seats}<br>
-            <a href="tel:${a.phone}">📞 ${a.phone}</a>
-            <div class="like">
-              <button onclick="like('${a.phone}')">
-                ❤️
-              </button>
-              <span>${p}</span>
-            </div>
-          `;
-          box.appendChild(card);
-        });
-      })
-      .catch(() => {
-        box.innerHTML = "<p>Ошибка загрузки</p>";
-      });
-  };
-
-  // ===== LIKE =====
-  window.like = (phone) => {
-    points[phone] = (points[phone] || 0) + 1;
-    loadAds();
-  };
-
-  // ===== PUBLISH =====
-  window.publishAd = () => {
-    fetch(API + "/api/ads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        role: user.role,
-        route: document.getElementById("route").value,
-        price: document.getElementById("price").value,
-        seats: document.getElementById("seats").value,
-        phone: user.phone,
-        mode: document.getElementById("mode").value,
-        car: document.getElementById("car").value,
-        comment: document.getElementById("comment").value
-      })
-    }).then(() => {
-      show("screen-main");
-      loadAds();
-    });
-  };
-});
+<script src="app.js"></script>
+</body>
+</html>
 
