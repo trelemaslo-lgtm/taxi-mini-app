@@ -1,62 +1,59 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Ingichka Taksi</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Telegram Mini App -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
-<!-- LOADING -->
-<div id="loader" class="loader">
-  <div class="loader-glass">
-    <span class="loading-text">LOADING</span>
+  <!-- LOADER -->
+  <div id="loader">
+    <div class="loading-box">
+      <span class="loading-text">LOADING</span>
+    </div>
+    <div class="creator">created by <b>711 GROUP</b></div>
   </div>
-  <div class="loader-footer">created by <b>711 GROUP</b></div>
-</div>
 
-<header class="glass header">
-  <h2>🚕 Ingichka Taksi</h2>
-  <div class="toggle">
-    <button id="btnDrivers" class="active">🚕 Водители</button>
-    <button id="btnClients">👤 Клиенты</button>
+  <!-- APP -->
+  <div id="app" style="display:none">
+
+    <h1 class="logo">🚕 Ingichka Taksi</h1>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button id="btnDrivers" class="active">Водители</button>
+      <button id="btnClients">Клиенты</button>
+    </div>
+
+    <!-- Ads -->
+    <div id="ads"></div>
+
+    <!-- Add -->
+    <button class="add-btn" onclick="openForm()">＋ Разместить</button>
   </div>
-</header>
 
-<main id="ads"></main>
-
-<button class="fab" onclick="openForm()">＋</button>
-
-<div id="formOverlay" class="overlay hidden">
-  <div class="glass form">
-    <h3>Новое объявление</h3>
-
-    <select id="role">
-      <option value="driver">🚕 Водитель</option>
-      <option value="client">👤 Клиент</option>
-    </select>
-
-    <input id="name" placeholder="Имя">
-    <input id="phone" placeholder="Телефон">
-    <input id="route" placeholder="Маршрут">
-
-    <select id="mode">
-      <option value="now">⚡ Сразу еду</option>
-      <option value="wait">👥 Ожидаю 4</option>
-      <option value="later">⏱ Через 20–30 мин</option>
-    </select>
-
-    <input id="price" placeholder="Цена">
-    <input id="seats" placeholder="Свободные места">
-    <textarea id="comment" placeholder="Комментарий"></textarea>
-
-    <button onclick="sendAd()">Опубликовать</button>
-    <button class="secondary" onclick="closeForm()">Отмена</button>
+  <!-- FORM -->
+  <div id="formOverlay" class="hidden">
+    <div class="form glass">
+      <input id="route" placeholder="Маршрут" />
+      <input id="time" placeholder="Время" />
+      <input id="price" placeholder="Цена" />
+      <input id="phone" placeholder="Телефон" />
+      <button onclick="sendAd()">Опубликовать</button>
+      <button onclick="closeForm()">Отмена</button>
+    </div>
   </div>
-</div>
 
-<script src="app.js"></script>
+  <!-- JS -->
+  <script src="app.js"></script>
 </body>
 </html>
+
