@@ -1,211 +1,243 @@
-/* =======================
-   TELEGRAM INIT
-======================= */
-const tg = window.Telegram?.WebApp;
-if (tg) {
-  tg.ready();
-  tg.expand();
-}
+/*************************************************
+ * INGICHKA TAKSI — MONOLITH APP.JS (VARIANT B)
+ * Full logic, defensive, no crashes
+ *************************************************/
 
-/* =======================
-   STATE + STORAGE
-======================= */
-const STORAGE_KEY = "ingichka_app_state";
+(function () {
+  "use strict";
 
-let state = {
-  lang: null,
-  role: null,
-  profile: null,
-  ads: [],
-  location: null
-};
+  /***********************
+   * SAFE HELPERS
+   ***********************/
+  const $ = (id) => document.getElementById(id);
+  const log = (...a) => console.log("🚕", ...a);
 
-// load from storage
-const saved = localStorage.getItem(STORAGE_KEY);
-if (saved) state = JSON.parse(saved);
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-/* =======================
-   SCREENS
-======================= */
-const screens = document.querySelectorAll(".screen");
-
-function go(id) {
-  screens.forEach(s => s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-}
-
-/* =======================
-   LOADING FLOW
-======================= */
-setTimeout(() => {
-  if (!state.lang) go("language");
-  else if (!state.role) go("role");
-  else if (!state.profile) go("profileSetup");
-  else go("home");
-}, 2000);
-
-/* =======================
-   LANGUAGE
-======================= */
-function setLang(l) {
-  state.lang = l;
-  saveState();
-  go("role");
-}
-
-/* =======================
-   ROLE
-======================= */
-function setRole(r) {
-  state.role = r;
-  saveState();
-  go("profileSetup");
-}
-
-/* =======================
-   PROFILE
-======================= */
-function saveProfile() {
-  const name = document.getElementById("name").value.trim();
-  const phone = document.getElementById("phone").value.trim();
-  const car = document.getElementById("car").value.trim();
-
-  if (!name || !phone) {
-    alert("Profilni to‘ldiring");
-    return;
+  /***********************
+   * TELEGRAM INIT
+   ***********************/
+  try {
+    if (window.Telegram && Telegram.WebApp) {
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    }
+  } catch (e) {
+    log("Telegram API not available");
   }
 
-  state.profile = {
-    name,
-    phone,
-    car: state.role === "driver" ? car : "",
-    rating: state.profile?.rating || 5
+  /***********************
+   * STORAGE
+   ***********************/
+  const STORAGE_KEY = "ingichka_taxi_state";
+
+  const defaultState = {
+    profile: null,
+    ads: [],
+    location: null
   };
 
-  saveState();
-  renderProfile();
-  go("home");
-}
+  let state = defaultState;
 
-function renderProfile() {
-  if (!state.profile) return;
-  document.getElementById("pName").innerText = state.profile.name;
-  document.getElementById("pPhone").innerText = state.profile.phone;
-  document.getElementById("pCar").innerText =
-    state.role === "driver" ? state.profile.car : "";
-}
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) state = JSON.parse(saved);
+  } catch {
+    state = defaultState;
+  }
 
-/* =======================
-   GEOLOCATION
-======================= */
-function requestLocation() {
-  if (!navigator.geolocation) return;
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {}
+  }
 
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      state.location = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
-      saveState();
+  /***********************
+   * SCREENS
+   ***********************/
+  const screens = [
+    "screen-home",
+    "screen-add",
+    "screen-profile",
+    "screen-settings"
+  ];
+
+  function showScreen(id) {
+    screens.forEach(s => {
+      const el = $(s);
+      if (el) el.style.display = "none";
+    });
+    const target = $(id);
+    if (target) target.style.display = "block";
+  }
+
+  /***********************
+   * LOADER → APP
+   ***********************/
+  document.addEventListener("DOMContentLoaded", () => {
+    const loader = $("loader");
+    const app = $("app");
+
+    if (!loader || !app) {
+      alert("HTML structure error");
+      return;
+    }
+
+    setTimeout(() => {
+      loader.style.display = "none";
+      app.style.display = "block";
+      showScreen("screen-home");
+      renderProfile();
       renderAds();
-    },
-    () => {
-      state.location = null;
-      saveState();
-    }
-  );
-}
-requestLocation();
+      requestLocation();
+    }, 1200);
+  });
 
-function distanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) *
-    Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-/* =======================
-   ADS
-======================= */
-function createAd() {
-  if (state.role !== "driver") {
-    alert("Faqat haydovchi e’lon joylaydi");
-    return;
-  }
-
-  const from = prompt("Qayerdan?");
-  const to = prompt("Qayerga?");
-  const price = prompt("Narx?");
-  const seats = prompt("Bo‘sh joylar?");
-
-  if (!from || !to || !price) return;
-
-  const ad = {
-    id: Date.now(),
-    from,
-    to,
-    price,
-    seats,
-    created: Date.now(),
-    lat: state.location?.lat || null,
-    lng: state.location?.lng || null
+  /***********************
+   * NAVIGATION
+   ***********************/
+  const navMap = {
+    "nav-home": "screen-home",
+    "nav-add": "screen-add",
+    "nav-profile": "screen-profile",
+    "nav-settings": "screen-settings"
   };
 
-  state.ads.push(ad);
-  saveState();
-  renderAds();
-  go("home");
-}
+  Object.keys(navMap).forEach(btnId => {
+    const btn = $(btnId);
+    if (btn) {
+      btn.onclick = () => showScreen(navMap[btnId]);
+    }
+  });
 
-function renderAds() {
-  const list = document.getElementById("adsList");
-  if (!list) return;
-  list.innerHTML = "";
+  /***********************
+   * PROFILE
+   ***********************/
+  window.saveProfile = function () {
+    const name = $("profile-name")?.value?.trim();
+    const phone = $("profile-phone")?.value?.trim();
+    const car = $("profile-car")?.value?.trim();
 
-  // auto delete 60 min
-  state.ads = state.ads.filter(
-    a => Date.now() - a.created < 60 * 60 * 1000
-  );
-  saveState();
-
-  state.ads.forEach(ad => {
-    let distText = "";
-    if (state.location && ad.lat) {
-      const km = distanceKm(
-        state.location.lat,
-        state.location.lng,
-        ad.lat,
-        ad.lng
-      ).toFixed(1);
-      distText = `📍 ${km} km`;
+    if (!name || !phone) {
+      alert("Заполните профиль");
+      return;
     }
 
-    const div = document.createElement("div");
-    div.className = "profile-card";
-    div.innerHTML = `
-      🚕 ${ad.from} → ${ad.to}<br>
-      💰 ${ad.price}<br>
-      🪑 ${ad.seats || "-"}<br>
-      ${distText}<br>
-      <a href="tel:${state.profile.phone}">📞 Qo‘ng‘iroq</a>
-    `;
-    list.appendChild(div);
-  });
-}
+    state.profile = {
+      name,
+      phone,
+      car: car || "",
+      rating: state.profile?.rating || 5
+    };
 
-/* =======================
-   INIT
-======================= */
-renderProfile();
-renderAds();
+    saveState();
+    renderProfile();
+    showScreen("screen-home");
+  };
 
+  function renderProfile() {
+    if (!state.profile) return;
+
+    if ($("p-name")) $("p-name").innerText = state.profile.name;
+    if ($("p-phone")) $("p-phone").innerText = state.profile.phone;
+    if ($("p-car")) $("p-car").innerText = state.profile.car;
+    if ($("p-rating")) $("p-rating").innerText = state.profile.rating;
+  }
+
+  /***********************
+   * GEOLOCATION
+   ***********************/
+  function requestLocation() {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        state.location = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        };
+        saveState();
+        renderAds();
+      },
+      () => {}
+    );
+  }
+
+  function distanceKm(a, b, c, d) {
+    const R = 6371;
+    const dLat = (c - a) * Math.PI / 180;
+    const dLon = (d - b) * Math.PI / 180;
+    const x =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(a * Math.PI / 180) *
+      Math.cos(c * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+
+  /***********************
+   * ADS
+   ***********************/
+  window.createAd = function () {
+    const from = prompt("Точка A");
+    const to = prompt("Точка B");
+    const price = prompt("Цена");
+    const seats = prompt("Свободные места");
+
+    if (!from || !to || !price) return;
+
+    const ad = {
+      id: Date.now(),
+      from,
+      to,
+      price,
+      seats,
+      created: Date.now(),
+      lat: state.location?.lat || null,
+      lng: state.location?.lng || null
+    };
+
+    state.ads.push(ad);
+    saveState();
+    renderAds();
+    showScreen("screen-home");
+  };
+
+  function renderAds() {
+    const list = $("ads-list");
+    if (!list) return;
+
+    list.innerHTML = "";
+
+    const now = Date.now();
+    state.ads = state.ads.filter(a => now - a.created < 60 * 60 * 1000);
+    saveState();
+
+    if (state.ads.length === 0) {
+      list.innerHTML = "<p style='opacity:.6'>Объявлений нет</p>";
+      return;
+    }
+
+    state.ads.forEach(ad => {
+      let dist = "";
+      if (state.location && ad.lat) {
+        dist = distanceKm(
+          state.location.lat,
+          state.location.lng,
+          ad.lat,
+          ad.lng
+        ).toFixed(1) + " км";
+      }
+
+      const div = document.createElement("div");
+      div.className = "ad-card";
+      div.innerHTML = `
+        <b>${ad.from} → ${ad.to}</b><br>
+        💰 ${ad.price}<br>
+        🪑 ${ad.seats || "-"}<br>
+        ${dist}<br>
+        <a href="tel:${state.profile?.phone || ""}">📞 Позвонить</a>
+      `;
+      list.appendChild(div);
+    });
+  }
+
+})();
