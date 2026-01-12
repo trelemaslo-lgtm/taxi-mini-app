@@ -20,12 +20,25 @@
 <div id="app">
 
   <!-- LANGUAGE -->
-  <section id="screen-language" class="screen active">
+  <section id="screen-language" class="screen">
     <h1 data-i18n="choose_lang">Tilni tanlang</h1>
     <button class="lang-btn" data-lang="uz">O‘zbek</button>
     <button class="lang-btn" data-lang="ru">Русский</button>
     <button class="lang-btn" data-lang="uzk">Ўзбекча</button>
   </section>
+
+  <!-- SCREEN: ROLE -->
+<div class="screen" id="screen-role">
+  <h1>Выберите роль</h1>
+
+  <button class="main-btn" onclick="selectRole('driver')">
+    🚕 Я ВОДИТЕЛЬ
+  </button>
+
+  <button class="main-btn" onclick="selectRole('client')">
+    👤 Я КЛИЕНТ
+  </button>
+</div>
 
   <!-- HOME -->
   <section id="screen-home" class="screen">
