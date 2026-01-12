@@ -1,7 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("APP STARTED");
+  console.log("STAGE 1 START");
 
-  // Telegram init (без ошибок, даже если не Telegram)
   if (window.Telegram && Telegram.WebApp) {
     Telegram.WebApp.ready();
     Telegram.WebApp.expand();
@@ -10,16 +9,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const loading = document.getElementById("loading");
   const app = document.getElementById("app");
 
-  // Защита
-  if (!loading || !app) {
-    alert("HTML структура сломана");
-    return;
+  const screens = document.querySelectorAll(".screen");
+
+  function showScreen(id) {
+    screens.forEach(s => s.classList.remove("active"));
+    const el = document.getElementById(id);
+    if (el) el.classList.add("active");
   }
 
-  // Имитируем загрузку
   setTimeout(() => {
     loading.style.display = "none";
     app.style.display = "block";
-    console.log("APP SHOWN");
-  }, 1200);
+    showScreen("screen-home");
+  }, 1000);
+
+  document.getElementById("btn-home").onclick = () => showScreen("screen-home");
+  document.getElementById("btn-add").onclick = () => showScreen("screen-add");
+  document.getElementById("btn-profile").onclick = () => showScreen("screen-profile");
+  document.getElementById("btn-settings").onclick = () => showScreen("screen-settings");
 });
