@@ -1,117 +1,96 @@
-/*************************
- * SAFE TELEGRAM INIT
- *************************/
-let tg = null;
-if (window.Telegram && window.Telegram.WebApp) {
-  tg = window.Telegram.WebApp;
-  tg.expand();
-}
+const tg = window.Telegram.WebApp;
+tg.expand();
 
-/*************************
- * BACKEND URL
- *************************/
-const API = "";
+const API = "http://IP_BACKEND:10000";
 
-/*************************
- * DOM
- *************************/
-const addBtn = document.getElementById("addBtn");
-const form = document.getElementById("form");
 const adsBox = document.getElementById("ads");
+const btnDrivers = document.getElementById("btnDrivers");
+const btnClients = document.getElementById("btnClients");
+const loader = document.getElementById("loader");
 
-/*************************
- * SHOW FORM
- *************************/
-addBtn.onclick = () => {
-  form.style.display = "block";
-};
+let currentTab = "driver";
+let userLat = null, userLon = null;
 
-/*************************
- * LOAD ADS
- *************************/
-function loadAds() {
-  fetch(API + "/api/ads")
-    .then(r => r.text())
-    .then(text => {
-      let data = [];
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = [];
-      }
+btnDrivers.onclick = ()=>switchTab("driver");
+btnClients.onclick = ()=>switchTab("client");
 
-      adsBox.innerHTML = "";
-
-      if (!data.length) {
-        adsBox.innerHTML = "<p style='text-align:center;'>📭 Пока нет объявлений</p>";
-        return;
-      }
-
-      data.reverse().forEach(ad => {
-        adsBox.innerHTML += `
-          <div class="card">
-            <b>${ad.role === "driver" ? "🚕 Водитель" : "👤 Клиент"}</b><br>
-            📍 ${ad.route || "-"}<br>
-            ⏰ ${ad.time || "-"}<br>
-            🚕 ${ad.seats || "-"}<br>
-            💰 ${ad.price || "-"}<br>
-            📞 <a href="tel:${ad.phone}" style="color:#ffd400;">Позвонить</a>
-          </div>
-        `;
-      });
-    })
-    .catch(() => {
-      adsBox.innerHTML = "<p style='text-align:center;'>⚠️ Ошибка загрузки</p>";
-    });
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userLat = pos.coords.latitude;
+    userLon = pos.coords.longitude;
+    loadAds();
+  });
 }
 
-/*************************
- * SEND AD (ULTRA SAFE)
- *************************/
-function sendAd() {
-  const role = document.getElementById("role").value;
-  const route = document.getElementById("route").value;
-  const time = document.getElementById("time").value;
-  const seats = document.getElementById("seats").value;
-  const price = document.getElementById("price").value;
-  const phone = document.getElementById("phone").value;
-
-  if (!route || !price || !phone) {
-    tg ? tg.showAlert("❗ Заполни все поля") : alert("Заполни все поля");
-    return;
-  }
-
-  tg?.HapticFeedback?.impactOccurred("medium");
-
-  fetch(API + "/api/ads", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      role,
-      route,
-      time,
-      seats,
-      price,
-      phone
-    })
-  })
-    .then(() => {
-      form.style.display = "none";
-      loadAds();
-      tg?.showAlert("✅ Объявление опубликовано");
-    })
-    .catch(() => {
-      tg ? tg.showAlert("❌ Ошибка публикации") : alert("Ошибка публикации");
-    });
+function switchTab(role){
+  currentTab = role;
+  btnDrivers.classList.toggle("active", role==="driver");
+  btnClients.classList.toggle("active", role==="client");
+  loadAds();
 }
 
-/*************************
- * EXPORT
- *************************/
-window.sendAd = sendAd;
+function loadAds(){
+  let url = API + "/api/ads";
+  if (userLat) url += `?lat=${userLat}&lon=${userLon}`;
 
-/*************************
- * START
- *************************/
+  fetch(url).then(r=>r.json()).then(data=>{
+    adsBox.innerHTML="";
+    data.filter(a=>a.role===currentTab).forEach(a=>{
+      const d=document.createElement("div");
+      d.className="glass card";
+      d.innerHTML=`
+        <b>${a.name}</b> 🏆 ${a.points}<br>
+        <small>${a.route}</small><br>
+        ${a.distance?`📍 ${a.distance} км<br>`:""}
+        💰 ${a.price} | 👥 ${a.seats}<br>
+        <button class="like" onclick="like(${a.id},this)">👍</button>
+        <a href="tel:${a.phone}">📞</a>
+      `;
+      adsBox.appendChild(d);
+    });
+
+    setTimeout(()=>{
+      loader.style.opacity="0";
+      setTimeout(()=>loader.style.display="none",400);
+    },300);
+  });
+}
+
+function openForm(){ formOverlay.classList.remove("hidden"); }
+function closeForm(){ formOverlay.classList.add("hidden"); }
+
+function sendAd(){
+  fetch(API+"/api/ads",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      role:role.value,
+      name:name.value,
+      phone:phone.value,
+      route:route.value,
+      mode:mode.value,
+      price:price.value,
+      seats:seats.value,
+      comment:comment.value,
+      lat:userLat,
+      lon:userLon
+    })
+  }).then(()=>{
+    closeForm();
+    loadAds();
+  });
+}
+
+function like(id,btn){
+  btn.classList.add("liked");
+  fetch(API+"/api/like",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      ad_id:id,
+      user_id:tg.initDataUnsafe.user.id
+    })
+  }).then(()=>setTimeout(()=>btn.classList.remove("liked"),200));
+}
+
 loadAds();
-
