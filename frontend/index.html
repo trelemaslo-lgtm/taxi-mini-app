@@ -2,154 +2,76 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ingichka Taksi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
 <!-- LOADING -->
-<div id="screen-loading" class="screen active">
-  <div class="loading-box">
-    <div class="loading-text">LOADING</div>
+<div id="loader">
+  <div class="loader-card">
+    <div class="loader-text">LOADING</div>
   </div>
-  <div class="created">created by <span>711 GROUP</span></div>
+  <div class="loader-footer">created by <b>711 GROUP</b></div>
 </div>
 
-<!-- LANGUAGE -->
-<div id="screen-lang" class="screen">
-  <div class="glass card">
-    <h2 data-i18n="chooseLang"></h2>
-    <button onclick="setLang('ru')">Русский</button>
-    <button onclick="setLang('uz')">O‘zbek</button>
-    <button onclick="setLang('uzk')">Ўзбекча</button>
+<!-- APP -->
+<div id="app" class="hidden">
+
+  <!-- HEADER -->
+  <header class="header">
+    <span class="title">🚕 Ingichka Taksi</span>
+    <button onclick="openSettings()">⚙️</button>
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('drivers')">🚗 Водители</button>
+    <button class="tab" onclick="switchTab('clients')">👤 Клиенты</button>
   </div>
+
+  <!-- LIST -->
+  <div id="ads" class="list"></div>
+
+  <!-- ADD BUTTON -->
+  <button class="add-btn" onclick="openCreate()">＋ Создать объявление</button>
 </div>
 
-<!-- ROLE -->
-<div id="screen-role" class="screen">
-  <div class="glass card">
-    <h2 data-i18n="whoAreYou"></h2>
-    <button onclick="setRole('driver')">🚕 <span data-i18n="driver"></span></button>
-    <button onclick="setRole('client')">👤 <span data-i18n="client"></span></button>
-  </div>
-</div>
+<!-- CREATE (BOTTOM SHEET) -->
+<div id="createSheet" class="sheet hidden">
+  <div class="sheet-content glass">
+    <h3>Создать объявление</h3>
 
-<!-- PROFILE SETUP -->
-<div id="screen-profile" class="screen">
-  <div class="glass card">
-    <h2 data-i18n="profile"></h2>
-    <div class="avatar" id="profile-avatar-setup">👤</div>
-    <input type="file" id="photo-input" accept="image/*" />
-    <input id="name" data-i18n-ph="name" />
-    <input id="phone" data-i18n-ph="phone" />
-    <input id="tg-username" placeholder="Telegram username" />
-    <button onclick="saveProfile()" data-i18n="continue"></button>
-  </div>
-</div>
+    <input id="route" placeholder="Чирчик → Сергели">
+    <input id="car" placeholder="Марка машины">
+    <input id="carNumber" placeholder="Номер авто">
+    <input id="seats" placeholder="Свободные места">
+    <input id="price" placeholder="Цена">
+    <input id="phone" placeholder="+998...">
 
-<!-- MAIN -->
-<div id="screen-main" class="screen">
-  <div class="glass card">
-    <h2>🚕 Ingichka Taksi</h2>
+    <textarea id="comment" placeholder="Комментарий"></textarea>
 
-    <div class="tabs">
-      <button onclick="switchAds('driver')">🚕</button>
-      <button onclick="switchAds('client')">👤</button>
-    </div>
-
-    <div id="ads-list"></div>
-
-    <button onclick="show('screen-create-ad')">➕ <span data-i18n="addAd"></span></button>
-    <button onclick="openProfile()">👤 <span data-i18n="profile"></span></button>
-    <button onclick="show('screen-settings')">⚙️ <span data-i18n="settings"></span></button>
-  </div>
-</div>
-
-<!-- CREATE AD -->
-<div id="screen-create-ad" class="screen">
-  <div class="glass card">
-    <h2 data-i18n="addAd"></h2>
-    <input id="ad-route" data-i18n-ph="route" />
-    <input id="ad-price" data-i18n-ph="price" />
-    <select id="ad-seats">
-      <option value="">Места</option>
-      <option value="1">1</option>
-      <option value="2">2</option>
-      <option value="3">3</option>
-      <option value="4">4</option>
-    </select>
-    <select id="ad-mode">
-      <option value="now">Сразу</option>
-      <option value="later">20–30 мин</option>
-    </select>
-    <label><input type="checkbox" id="ad-vip" /> 👑 VIP</label>
-    <button onclick="publishAd()">Опубликовать</button>
-    <button class="secondary" onclick="show('screen-main')">Назад</button>
+    <button class="primary" onclick="publish()">Опубликовать</button>
+    <button class="secondary" onclick="closeCreate()">Назад</button>
   </div>
 </div>
 
 <!-- SETTINGS -->
-<div id="screen-settings" class="screen">
-  <div class="glass card">
-    <h2 data-i18n="settings"></h2>
-    <button onclick="show('screen-lang')">🌍 Язык</button>
-    <button onclick="show('screen-donate')">💛 Донат</button>
-    <button onclick="show('screen-about')">ℹ️ О нас</button>
-    <button id="admin-btn" style="display:none" onclick="show('screen-admin')">🛠 Админ</button>
-    <button class="secondary" onclick="show('screen-main')">Назад</button>
-  </div>
-</div>
-
-<!-- DONATE -->
-<div id="screen-donate" class="screen">
-  <div class="glass card">
-    <h2>💛 Донат</h2>
-    <p>Поддержать проект</p>
-    <button onclick="donate(5000)">5 000</button>
-    <button onclick="donate(10000)">10 000</button>
-    <button class="secondary" onclick="show('screen-settings')">Назад</button>
-  </div>
-</div>
-
-<!-- ABOUT -->
-<div id="screen-about" class="screen">
-  <div class="glass card">
-    <h2>ℹ️ О нас</h2>
-    <p>Ingichka Taksi<br>created by <b>711 GROUP</b></p>
-    <button class="secondary" onclick="show('screen-settings')">Назад</button>
-  </div>
-</div>
-
-<!-- ADMIN -->
-<div id="screen-admin" class="screen">
-  <div class="glass card">
-    <h2>🛠 Админ</h2>
-    <div id="admin-ads"></div>
-    <button class="secondary" onclick="show('screen-settings')">Назад</button>
-  </div>
-</div>
-
-<!-- BOTTOM SHEET -->
-<div id="ad-overlay" class="overlay hidden" onclick="closeAdSheet()"></div>
-<div id="ad-sheet" class="bottom-sheet hidden">
-  <div class="sheet-handle"></div>
+<div id="settings" class="sheet hidden">
   <div class="sheet-content glass">
-    <div id="d-avatar" class="avatar">👤</div>
-    <h2 id="d-route"></h2>
-    <div class="sheet-info">
-      <div id="d-name"></div>
-      <div id="d-car"></div>
-      <div id="d-price"></div>
-    </div>
-    <a id="d-phone" class="call-btn">📞 Позвонить</a>
-    <button id="tg-chat-btn" class="tg-btn">💬 Telegram</button>
-    <button class="secondary" onclick="closeAdSheet()">Закрыть</button>
+    <h3>Настройки</h3>
+
+    <button onclick="setLang('ru')">🇷🇺 Русский</button>
+    <button onclick="setLang('uz')">🇺🇿 O‘zbek</button>
+    <button onclick="setLang('uzk')">🇺🇿 Ўзбекча</button>
+
+    <button>💛 Поддержать</button>
+    <button onclick="closeSettings()">Закрыть</button>
   </div>
 </div>
-
-<div id="toast" class="toast hidden"></div>
 
 <script src="app.js"></script>
 </body>
