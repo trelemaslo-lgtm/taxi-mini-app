@@ -4,7 +4,6 @@
 
 body {
   margin: 0;
-  height: 100vh;
   background: #000;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
@@ -24,7 +23,6 @@ body {
 .loading-text {
   font-size: 22px;
   color: #ffd600;
-  margin-bottom: 8px;
 }
 
 .loading-sub {
@@ -32,7 +30,7 @@ body {
   opacity: 0.6;
 }
 
-/* APP */
+/* SCREENS */
 #app {
   display: none;
   padding-bottom: 80px;
@@ -45,6 +43,23 @@ body {
 
 .screen.active {
   display: block;
+}
+
+/* BUTTONS */
+button {
+  width: 100%;
+  padding: 14px;
+  margin: 10px 0;
+  border-radius: 14px;
+  border: none;
+  font-size: 16px;
+}
+
+.main-btn,
+.lang-btn {
+  background: #ffd600;
+  color: #000;
+  font-weight: 600;
 }
 
 /* BOTTOM NAV */
@@ -62,51 +77,6 @@ body {
 .bottom-nav button {
   flex: 1;
   background: none;
-  border: none;
   color: #ffd600;
   font-size: 20px;
-}
-.lang-btn {
-  width: 100%;
-  padding: 14px;
-  margin: 10px 0;
-  border-radius: 14px;
-  border: none;
-  background: #ffd600;
-  color: #000;
-  font-size: 16px;
-  font-weight: 600;
-}
-.lang-btn {
-  display: block;
-  width: 100%;
-  padding: 14px;
-  margin: 12px 0;
-  border-radius: 14px;
-  border: none;
-  background: #ffd600;
-  color: #000;
-  font-size: 16px;
-  font-weight: 600;
-}
-.screen {
-  display: none;
-  padding: 24px;
-  color: white;
-}
-
-.screen.active {
-  display: block;
-}
-
-.main-btn {
-  width: 100%;
-  padding: 16px;
-  margin: 12px 0;
-  border-radius: 16px;
-  border: none;
-  background: #f5c400;
-  color: #000;
-  font-size: 18px;
-  font-weight: 600;
 }
