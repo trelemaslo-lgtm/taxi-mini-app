@@ -1,184 +1,61 @@
-/* ===== RESET ===== */
-* {
-  box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui;
-}
-
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/* ===== GLOBAL BACKGROUND (FIX WHITE ISSUE) ===== */
+* { box-sizing: border-box; font-family: -apple-system, system-ui; }
 body {
-  background:
-    radial-gradient(circle at top left, #2a2a2a, #0b0b0b 60%),
-    linear-gradient(180deg, #000, #111);
-  color: #f5f5f5;
-  overflow-x: hidden;
+  margin: 0;
+  background: radial-gradient(circle at top, #222, #000);
+  color: #fff;
 }
+.hidden { display: none; }
 
-/* ===== SCREENS ===== */
-.screen {
-  position: absolute;
-  inset: 0;
-  padding: 20px;
-  opacity: 0;
-  transform: translateY(16px) scale(0.98);
-  pointer-events: none;
-  transition: 
-    opacity .35s ease,
-    transform .35s ease;
-}
-
-.screen.active {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  pointer-events: auto;
-}
-
-/* ===== CENTER ===== */
-.center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ===== REAL GLASSMORPHISM ===== */
 .glass {
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow:
-    0 10px 30px rgba(0,0,0,0.35),
-    inset 0 1px 0 rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(18px);
+  border-radius: 20px;
+  padding: 14px;
 }
 
-/* ===== CARD ===== */
-.card {
-  width: 100%;
-  max-width: 360px;
-  padding: 20px;
-  margin-bottom: 14px;
-}
-
-/* ===== TEXT ===== */
-h1, h2 {
-  margin: 0 0 12px;
-  text-align: center;
-  color: #fff;
-}
-
-p {
-  color: #e0e0e0;
-}
-
-/* ===== INPUTS ===== */
-input, textarea, select {
-  width: 100%;
-  padding: 12px 14px;
-  margin-top: 10px;
-  border-radius: 14px;
-  border: none;
-  outline: none;
-  background: rgba(0,0,0,0.45);
-  color: #fff;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: #bdbdbd;
-}
-
-/* ===== BUTTONS ===== */
-button {
-  width: 100%;
-  margin-top: 12px;
-  padding: 13px;
-  border-radius: 16px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
-  background: linear-gradient(180deg, #ffd700, #e6b800);
-  color: #000;
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-
-button:active {
-  transform: scale(0.96);
-}
-
-button.ghost {
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-}
-
-/* ===== LOADING ===== */
-.loader {
-  position: absolute;
+#loader {
+  position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
 }
 
 .loading-text {
+  color: gold;
   letter-spacing: 6px;
-  font-weight: 600;
-  color: rgba(255,215,0,0.9);
   animation: pulse 1.4s infinite;
 }
 
 @keyframes pulse {
-  0% { opacity: .4 }
-  50% { opacity: 1 }
-  100% { opacity: .4 }
+  0% { opacity:.4 }
+  50% { opacity:1 }
+  100% { opacity:.4 }
 }
 
-.brand {
-  margin-top: 20px;
-  font-size: 12px;
-  opacity: .6;
-}
-
-/* ===== SKELETON ===== */
-.skeleton {
-  height: 80px;
-  border-radius: 18px;
-  background: linear-gradient(
-    90deg,
-    rgba(255,255,255,0.08),
-    rgba(255,255,255,0.18),
-    rgba(255,255,255,0.08)
-  );
-  background-size: 200% 100%;
-  animation: skeleton 1.2s infinite;
-  margin-bottom: 12px;
-}
-
-@keyframes skeleton {
-  0% { background-position: 200% 0 }
-  100% { background-position: -200% 0 }
-}
-
-/* ===== LIKE ===== */
-.like {
+.header, .tabs {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
 }
 
-.like button {
-  width: auto;
-  padding: 6px 10px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.2);
-  color: #fff;
+#ads .card {
+  margin: 10px;
+}
+
+.publish {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  padding: 14px;
+  background: gold;
+  border: none;
+  border-radius: 20px;
+}
+
+.modal {
+  position: fixed;
+  inset: 10%;
 }
