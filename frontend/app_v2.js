@@ -1,3 +1,16 @@
+document.addEventListener("DOMContentLoaded", () => {
+  const loader = document.getElementById("loader");
+  const app = document.getElementById("app");
+
+  // показать приложение
+  if (app) app.style.display = "block";
+
+  // скрыть loader
+  if (loader) {
+    loader.style.opacity = "0";
+    setTimeout(() => loader.style.display = "none", 400);
+  }
+});
 // === TELEGRAM INIT ===
 const tg = window.Telegram.WebApp;
 tg.expand();
