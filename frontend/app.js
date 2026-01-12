@@ -1,296 +1,245 @@
-/*************************************************
- * INGICHKA TAKSI — FINAL STABLE APP.JS
- * created by 711 GROUP
- *************************************************/
+/***********************
+ * CONFIG
+ ***********************/
+const AD_LIFE_MIN = 30;
 
-// ===== CONFIG =====
-const API_URL = "https://taxi-backend-5kl2.onrender.com"; // ← ОБЯЗАТЕЛЬНО ЗАМЕНИ
-const ADMIN_ID = 6813692852; // ← твой Telegram user_id
-const ADS_TTL_MIN = 30;
+/***********************
+ * GLOBAL STATE
+ ***********************/
+let currentLang = localStorage.getItem("lang");
+let role = localStorage.getItem("role");
+let profile = JSON.parse(localStorage.getItem("profile") || "null");
+let userLocation = null;
 
-// ===== TELEGRAM =====
-const tg = window.Telegram.WebApp;
-tg.expand();
+/***********************
+ * START APP
+ ***********************/
+window.onload = () => {
+  getUserLocation();
 
-// ===== STORAGE =====
-const store = {
-  get: (k) => JSON.parse(localStorage.getItem(k)),
-  set: (k, v) => localStorage.setItem(k, JSON.stringify(v)),
-  del: (k) => localStorage.removeItem(k)
+  setTimeout(() => {
+    hide("loading-screen");
+
+    if (!currentLang) return show("lang-screen");
+    if (!role) return show("role-screen");
+    if (!profile) return show("profile-form-screen");
+
+    show("main-screen");
+    show("bottom-nav");
+  }, 1000);
 };
 
-// ===== I18N =====
-const i18n = {
-  ru: {
-    chooseLang: "Выберите язык",
-    whoAreYou: "Кто вы?",
-    driver: "Водитель",
-    client: "Клиент",
-    profile: "Профиль",
-    name: "Имя",
-    phone: "Телефон",
-    continue: "Продолжить",
-    addAd: "Разместить объявление",
-    settings: "Настройки"
-  },
-  uz: {
-    chooseLang: "Tilni tanlang",
-    whoAreYou: "Siz kimsiz?",
-    driver: "Haydovchi",
-    client: "Mijoz",
-    profile: "Profil",
-    name: "Ism",
-    phone: "Telefon",
-    continue: "Davom etish",
-    addAd: "E’lon joylash",
-    settings: "Sozlamalar"
-  },
-  uzk: {
-    chooseLang: "Тилни танланг",
-    whoAreYou: "Сиз кимсиз?",
-    driver: "Ҳайдовчи",
-    client: "Мижоз",
-    profile: "Профил",
-    name: "Исм",
-    phone: "Телефон",
-    continue: "Давом этиш",
-    addAd: "Эълон жойлаш",
-    settings: "Созламалар"
-  }
-};
-
-function t(key) {
-  const lang = store.get("lang") || "ru";
-  return i18n[lang][key] || key;
-}
-
-// ===== SCREEN NAV =====
+/***********************
+ * BASIC HELPERS
+ ***********************/
 function show(id) {
-  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-  applyTexts();
+  document.getElementById(id).classList.remove("hidden");
+}
+function hide(id) {
+  document.getElementById(id).classList.add("hidden");
 }
 
-// ===== APPLY TEXTS =====
-function applyTexts() {
-  document.querySelectorAll("[data-i18n]").forEach(el => {
-    el.innerText = t(el.dataset.i18n);
-  });
-  document.querySelectorAll("[data-i18n-ph]").forEach(el => {
-    el.placeholder = t(el.dataset.i18nPh);
-  });
-}
-
-// ===== START APP =====
-window.addEventListener("DOMContentLoaded", () => {
-  setTimeout(startFlow, 1200);
-});
-
-function startFlow() {
-  if (!store.get("lang")) return show("screen-lang");
-  if (!store.get("role")) return show("screen-role");
-  if (!store.get("profile")) return show("screen-profile");
-  show("screen-main");
-
-  if (isAdmin()) {
-    const btn = document.getElementById("admin-btn");
-    if (btn) btn.style.display = "block";
-  }
-
-  loadAds();
-}
-
-// ===== ONBOARDING =====
+/***********************
+ * LANGUAGE
+ ***********************/
 function setLang(lang) {
-  store.set("lang", lang);
-  show("screen-role");
+  currentLang = lang;
+  localStorage.setItem("lang", lang);
+  hide("lang-screen");
+  show("role-screen");
 }
 
-function setRole(role) {
-  store.set("role", role);
-  show("screen-profile");
+/***********************
+ * ROLE
+ ***********************/
+function selectRole(r) {
+  role = r;
+  localStorage.setItem("role", r);
+  hide("role-screen");
+  show("profile-form-screen");
 }
 
+/***********************
+ * PROFILE
+ ***********************/
 function saveProfile() {
-  const name = document.getElementById("name").value.trim();
-  const phone = document.getElementById("phone").value.trim();
-  const username = document.getElementById("tg-username").value.trim();
-  const file = document.getElementById("photo-input").files[0];
-
-  if (!name || !phone) {
-    alert("Заполните данные");
-    return;
-  }
-
-  const save = (photo) => {
-    store.set("profile", {
-      name,
-      phone,
-      username: username || null,
-      photo,
-      points: 0,
-      rating: 0
-    });
-    show("screen-main");
-    loadAds();
+  profile = {
+    name: document.getElementById("pf-name").value,
+    phone: document.getElementById("pf-phone").value,
+    car: document.getElementById("pf-car").value,
+    role: role,
+    points: profile?.points || 0
   };
 
-  if (file) {
-    const r = new FileReader();
-    r.onload = () => save(r.result);
-    r.readAsDataURL(file);
-  } else {
-    save(null);
-  }
+  localStorage.setItem("profile", JSON.stringify(profile));
+
+  hide("profile-form-screen");
+  show("main-screen");
+  show("bottom-nav");
 }
 
-// ===== PROFILE VIEW =====
+/***********************
+ * NAVIGATION
+ ***********************/
+function navTo(screen) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.add("hidden"));
+  show(screen + "-screen");
+
+  if (screen === "ads") openAds();
+  if (screen === "profile") openProfile();
+}
+
+/***********************
+ * PROFILE VIEW
+ ***********************/
 function openProfile() {
-  const p = store.get("profile");
+  const p = JSON.parse(localStorage.getItem("profile"));
+  if (!p) return;
+
   document.getElementById("profile-name").innerText = p.name;
   document.getElementById("profile-phone").innerText = p.phone;
+  document.getElementById("profile-car").innerText = p.car || "-";
 
-  const avatar = document.getElementById("profile-avatar");
-  avatar.innerHTML = p.photo ? `<img src="${p.photo}">` : "👤";
-
-  show("screen-profile-view");
+  const points = p.points || 0;
+  document.getElementById("profile-rating").innerText = Math.min(5, points).toFixed(1);
+  document.getElementById("profile-points").innerText = `(${points})`;
 }
 
-// ===== ADS =====
-let adsMode = "driver";
+/***********************
+ * GEOLOCATION
+ ***********************/
+function getUserLocation() {
+  if (!navigator.geolocation) return;
 
-function switchAds(mode) {
-  adsMode = mode;
-  loadAds();
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLocation = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude
+      };
+      console.log("📍 Location:", userLocation);
+    },
+    err => {
+      console.log("❌ Geo denied");
+    },
+    { enableHighAccuracy: true }
+  );
 }
 
-function loadAds() {
-  fetch(API_URL + "/api/ads")
-    .then(r => r.json())
-    .then(data => {
-      const box = document.getElementById("ads-list");
-      box.innerHTML = "";
+/***********************
+ * DISTANCE (HAVERSINE)
+ ***********************/
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
 
-      const filtered = data.filter(a => a.role === adsMode);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
 
-      if (filtered.length === 0) {
-        box.innerHTML = "<p style='opacity:.6'>Нет объявлений</p>";
-        return;
-      }
-
-      filtered.forEach(ad => {
-        const el = document.createElement("div");
-        el.className = "glass card";
-        el.onclick = () => openAdDetails(ad);
-
-        el.innerHTML = `
-          <b>${ad.route}</b><br>
-          💰 ${ad.price}<br>
-          ${ad.seats ? "🪑 " + ad.seats + " мест<br>" : ""}
-          ${ad.isVIP ? "<div class='vip-badge'>👑 VIP</div>" : ""}
-        `;
-        box.appendChild(el);
-      });
-    });
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ===== CREATE AD =====
-function publishAd() {
-  const profile = store.get("profile");
+/***********************
+ * ADS
+ ***********************/
+function openAds() {
+  getUserLocation();
+  cleanupAds();
 
-  const data = {
-    role: store.get("role"),
-    route: document.getElementById("ad-route").value,
-    price: document.getElementById("ad-price").value,
-    seats: document.getElementById("ad-seats").value,
-    mode: document.getElementById("ad-mode").value,
-    isVIP: document.getElementById("ad-vip").checked,
-    phone: profile.phone,
-    name: profile.name
-  };
+  show("ads-screen");
+  showSkeleton();
 
-  if (!data.route || !data.price) {
-    alert("Заполните маршрут и цену");
-    return;
-  }
-
-  fetch(API_URL + "/api/ads", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  }).then(() => {
-    show("screen-main");
-    loadAds();
-  });
-}
-
-// ===== BOTTOM SHEET =====
-function openAdDetails(ad) {
-  document.getElementById("d-route").innerText = ad.route.replace("-", " → ");
-  document.getElementById("d-name").innerText = ad.name || "Водитель";
-  document.getElementById("d-car").innerText = ad.carNumber || "—";
-  document.getElementById("d-price").innerText = ad.price + " сум";
-
-  const phone = document.getElementById("d-phone");
-  phone.href = "tel:" + ad.phone;
-
-  const avatar = document.getElementById("d-avatar");
-  const p = store.get("profile");
-  avatar.innerHTML = p?.photo ? `<img src="${p.photo}">` : "👤";
-
-  const tgBtn = document.getElementById("tg-chat-btn");
-  if (ad.username) {
-    tgBtn.style.display = "block";
-    tgBtn.onclick = () => window.open("https://t.me/" + ad.username);
-  } else {
-    tgBtn.style.display = "none";
-  }
-
-  document.getElementById("ad-overlay").classList.remove("hidden");
-  const sheet = document.getElementById("ad-sheet");
-  sheet.classList.remove("hidden");
-  setTimeout(() => sheet.classList.add("show"), 10);
-}
-
-function closeAdSheet() {
-  const sheet = document.getElementById("ad-sheet");
-  sheet.classList.remove("show");
   setTimeout(() => {
-    sheet.classList.add("hidden");
-    document.getElementById("ad-overlay").classList.add("hidden");
-  }, 300);
+    renderAds();
+    hideSkeleton();
+  }, 800);
 }
 
-// ===== ADMIN =====
-function isAdmin() {
-  return Telegram.WebApp.initDataUnsafe?.user?.id === ADMIN_ID;
-}
+function renderAds() {
+  let ads = JSON.parse(localStorage.getItem("ads") || "[]");
+  const box = document.getElementById("ads-list");
+  box.innerHTML = "";
 
-function loadAdminAds() {
-  fetch(API_URL + "/api/ads")
-    .then(r => r.json())
-    .then(data => {
-      const box = document.getElementById("admin-ads");
-      box.innerHTML = "";
-      data.forEach(ad => {
-        const el = document.createElement("div");
-        el.className = "glass card";
-        el.innerHTML = `
-          <b>${ad.route}</b><br>
-          ${ad.phone}<br>
-          <button onclick="deleteAd(${ad.id})">❌ Удалить</button>
-        `;
-        box.appendChild(el);
-      });
+  // sort by distance
+  if (userLocation) {
+    ads.sort((a, b) => {
+      if (!a.lat || !b.lat) return 0;
+      const da = distanceKm(userLocation.lat, userLocation.lon, a.lat, a.lon);
+      const db = distanceKm(userLocation.lat, userLocation.lon, b.lat, b.lon);
+      return da - db;
     });
+  }
+
+  ads.forEach(ad => {
+    const div = document.createElement("div");
+    div.className = "ad";
+
+    let distText = "";
+    if (userLocation && ad.lat) {
+      const km = distanceKm(
+        userLocation.lat,
+        userLocation.lon,
+        ad.lat,
+        ad.lon
+      ).toFixed(1);
+      distText = `<span>📍 ${km} км от вас</span>`;
+    }
+
+    div.innerHTML = `
+      <b>${ad.from || "Точка А"} → ${ad.to || "Точка Б"}</b>
+      <span>💰 ${ad.price || "-"}</span>
+      <span>🪑 ${ad.seats || "-"}</span>
+      ${distText}
+    `;
+
+    box.appendChild(div);
+  });
+
+  box.classList.remove("hidden");
 }
 
-function deleteAd(id) {
-  fetch(API_URL + "/api/ads/" + id, { method: "DELETE" })
-    .then(loadAdminAds);
+/***********************
+ * CREATE AD (HELPER)
+ ***********************/
+function createAd(ad) {
+  if (userLocation) {
+    ad.lat = userLocation.lat;
+    ad.lon = userLocation.lon;
+  }
+
+  ad.createdAt = Date.now();
+
+  const ads = JSON.parse(localStorage.getItem("ads") || "[]");
+  ads.unshift(ad);
+  localStorage.setItem("ads", JSON.stringify(ads));
 }
 
-// ===== DONATE =====
-function donate(amount) {
-  alert("Донат: " + amount + " сум (подключим позже)");
+/***********************
+ * AUTO DELETE ADS
+ ***********************/
+function cleanupAds() {
+  const now = Date.now();
+  let ads = JSON.parse(localStorage.getItem("ads") || "[]");
+
+  ads = ads.filter(ad => {
+    return (now - ad.createdAt) / 60000 <= AD_LIFE_MIN;
+  });
+
+  localStorage.setItem("ads", JSON.stringify(ads));
+}
+
+/***********************
+ * SKELETON
+ ***********************/
+function showSkeleton() {
+  document.getElementById("ads-skeleton").classList.remove("hidden");
+  document.getElementById("ads-list").classList.add("hidden");
+}
+
+function hideSkeleton() {
+  document.getElementById("ads-skeleton").classList.add("hidden");
 }
