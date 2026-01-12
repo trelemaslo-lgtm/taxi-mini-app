@@ -46,11 +46,29 @@
     <p>Keyingi bosqichda</p>
   </section>
 
-  <!-- PROFILE -->
-  <section id="screen-profile" class="screen">
-    <h1>👤 Profil</h1>
-    <p>Profil sozlamalari</p>
-  </section>
+ <!-- PROFILE -->
+<section id="screen-profile" class="screen">
+  <h1>👤 Profil</h1>
+
+  <input id="profile-name" placeholder="Ism Familiya" />
+  <input id="profile-phone" placeholder="Telefon raqam" />
+
+  <!-- Только для водителя -->
+  <input id="profile-car" placeholder="Mashina raqami (haydovchi)" />
+
+  <button class="main-btn" onclick="saveProfile()">Saqlash</button>
+
+  <hr />
+
+  <!-- Просмотр профиля -->
+  <div id="profile-view" style="display:none;">
+    <p><b>Ism:</b> <span id="view-name"></span></p>
+    <p><b>Telefon:</b> <span id="view-phone"></span></p>
+    <p id="view-car-wrap"><b>Mashina:</b> <span id="view-car"></span></p>
+
+    <button class="main-btn" onclick="editProfile()">✏️ Tahrirlash</button>
+  </div>
+</section>
 
   <!-- SETTINGS -->
   <section id="screen-settings" class="screen">
