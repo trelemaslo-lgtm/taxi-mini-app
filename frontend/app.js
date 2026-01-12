@@ -94,3 +94,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-profile").onclick = () => showScreen("screen-profile");
   document.getElementById("btn-settings").onclick = () => showScreen("screen-settings");
 });
+// ROLE LOGIC
+function selectRole(role) {
+  localStorage.setItem("role", role);
+  showScreen("screen-profile");
+}
