@@ -1,156 +1,142 @@
+const API = "https://taxi-backend-5kl2.onrender.com"; // ← ВСТАВЬ СВОЙ BACKEND URL
+const ADMIN_ID = 6813692852; // ← ТВОЙ TELEGRAM ID
+const DONATE_URL = "https://your-payment-link";
+
+const tg = Telegram.WebApp;
+tg.expand();
+
+let currentTab = "driver";
+let userLocation = null;
+let likes = JSON.parse(localStorage.getItem("likes") || "{}");
+
 document.addEventListener("DOMContentLoaded", () => {
-  const API = "https://taxi-backend-5kl2.onrender.com";
-  const tg = window.Telegram?.WebApp;
-  if (tg) tg.expand();
-
-  const loader = document.getElementById("loader");
-  const app = document.getElementById("app");
-  const screens = document.querySelectorAll(".screen");
-
-  function show(id) {
-    screens.forEach(s => s.classList.remove("active"));
-    const el = document.getElementById(id);
-    if (el) el.classList.add("active");
-  }
-
-  // ===== INIT =====
   setTimeout(() => {
-    if (loader) loader.style.display = "none";
-    if (app) app.style.display = "block";
-    show("screen-lang");
-  }, 900);
-
-  // ===== STATE =====
-  const user = {
-    lang: null,
-    name: null,
-    phone: null,
-    role: null
-  };
-
-  let currentTab = "driver";
-  const points = {};
-
-  // ===== LANGUAGE =====
-  window.setLang = (lang) => {
-    user.lang = lang;
-    show("screen-profile-input");
-  };
-
-  // ===== PROFILE =====
-  window.saveProfile = () => {
-    const name = document.getElementById("name")?.value;
-    const phone = document.getElementById("phone")?.value;
-    if (!name || !phone) {
-      alert("Введите имя и телефон");
-      return;
-    }
-    user.name = name;
-    user.phone = phone;
-    show("screen-role");
-  };
-
-  // ===== ROLE =====
-  window.setRole = (role) => {
-    user.role = role;
-    show("screen-main");
+    loader.classList.add("hidden");
+    app.classList.remove("hidden");
     loadAds();
-  };
+  }, 1000);
 
-  // ===== NAV =====
-  window.goMain = () => show("screen-main");
-  window.openForm = () => show("screen-form");
-  window.goSettings = () => show("screen-settings");
-
-  window.goProfile = () => {
-    document.getElementById("p-name").innerText = user.name || "";
-    document.getElementById("p-phone").innerText = user.phone || "";
-    document.getElementById("p-role").innerText = user.role || "";
-    document.getElementById("p-points").innerText = points[user.phone] || 0;
-    show("screen-profile-view");
-  };
-
-  // ===== TABS =====
-  window.switchTab = (tab) => {
-    currentTab = tab;
-    loadAds();
-  };
-
-  // ===== LOAD ADS =====
-  function loadAds() {
-    const box = document.getElementById("ads");
-    if (!box) return;
-
-    box.innerHTML = `
-      <div class="skeleton"></div>
-      <div class="skeleton"></div>
-    `;
-
-    fetch(API + "/api/ads")
-      .then(r => r.json())
-      .then(data => {
-        box.innerHTML = "";
-        const list = data.filter(a => a.role === currentTab);
-
-        if (!list.length) {
-          box.innerHTML = "<p>Пока нет объявлений</p>";
-          return;
-        }
-
-        list.forEach(a => {
-          const card = document.createElement("div");
-          card.className = "glass card";
-
-          const likeCount = points[a.phone] || 0;
-
-          card.innerHTML = `
-            <b>${a.route}</b><br>
-            💰 ${a.price} | 👥 ${a.seats}<br>
-            🚗 ${a.car || "-"}<br>
-            📞 <a href="tel:${a.phone}">${a.phone}</a>
-            <div class="like">
-              <button onclick="like('${a.phone}')">❤️</button>
-              <span>${likeCount}</span>
-            </div>
-          `;
-          box.appendChild(card);
-        });
-      })
-      .catch(() => {
-        box.innerHTML = "<p>Ошибка загрузки</p>";
-      });
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      userLocation = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+    });
   }
 
-  // ===== LIKE =====
-  window.like = (phone) => {
-    points[phone] = (points[phone] || 0) + 1;
-    loadAds();
-  };
-
-  // ===== PUBLISH =====
-  window.publishAd = () => {
-    const payload = {
-      role: user.role,
-      route: document.getElementById("route")?.value,
-      price: document.getElementById("price")?.value,
-      seats: document.getElementById("seats")?.value,
-      phone: user.phone,
-      mode: document.getElementById("mode")?.value,
-      car: document.getElementById("car")?.value,
-      comment: document.getElementById("comment")?.value
-    };
-
-    fetch(API + "/api/ads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    })
-      .then(() => {
-        show("screen-main");
-        loadAds();
-      })
-      .catch(() => {
-        alert("Ошибка публикации");
-      });
-  };
+  const tgId = tg.initDataUnsafe?.user?.id;
+  if (tgId === ADMIN_ID) {
+    document.getElementById("admin-btn").style.display = "block";
+  }
 });
+
+function switchTab(tab) {
+  currentTab = tab;
+  loadAds();
+}
+
+function getDistanceKm(lat1,lng1,lat2,lng2){
+  const R=6371;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+    Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function loadAds() {
+  fetch(API+"/api/ads")
+    .then(r=>r.json())
+    .then(data=>{
+      let list=data.filter(a=>a.role===currentTab);
+      if(userLocation){
+        list=list.map(a=>{
+          if(a.lat&&a.lng){
+            a.distance=getDistanceKm(userLocation.lat,userLocation.lng,a.lat,a.lng);
+          }
+          return a;
+        }).sort((a,b)=>(a.distance||999)-(b.distance||999));
+      }
+      ads.innerHTML="";
+      list.forEach(a=>{
+        const card=document.createElement("div");
+        card.className="card glass";
+        card.innerHTML=`
+          <b>${a.route}</b><br>
+          💰 ${a.price}<br>
+          🪑 ${a.seats}<br>
+          ${a.distance?`📍 ${a.distance.toFixed(1)} км<br>`:""}
+          ❤️ ${(likes[a.phone]||0)}
+          <button onclick="like('${a.phone}')">❤️</button>
+          <br><a href="tel:${a.phone}">📞 ${a.phone}</a>
+        `;
+        ads.appendChild(card);
+      });
+    });
+}
+
+function like(phone){
+  likes[phone]=(likes[phone]||0)+1;
+  localStorage.setItem("likes",JSON.stringify(likes));
+  loadAds();
+}
+
+function openForm(){ form.classList.remove("hidden"); }
+function closeForm(){ form.classList.add("hidden"); }
+
+function publishAd(){
+  fetch(API+"/api/ads",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      role:role.value,
+      route:route.value,
+      time:time.value,
+      seats:seats.value,
+      price:price.value,
+      phone:phone.value,
+      comment:comment.value,
+      lat:userLocation?.lat,
+      lng:userLocation?.lng
+    })
+  }).then(()=>{ closeForm(); loadAds(); });
+}
+
+function openProfile(){
+  p-info.innerText="Профиль активен";
+  profile.classList.remove("hidden");
+}
+function closeProfile(){ profile.classList.add("hidden"); }
+
+function openSettings(){ settings.classList.remove("hidden"); }
+function closeSettings(){ settings.classList.add("hidden"); }
+
+function openDonate(){ donate.classList.remove("hidden"); }
+function closeDonate(){ donate.classList.add("hidden"); }
+
+function donate(amount){
+  fetch(API+"/api/stats/donate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount})});
+  window.open(DONATE_URL,"_blank");
+}
+
+function openAdmin(){
+  admin.classList.remove("hidden");
+  fetch(API+"/api/ads").then(r=>r.json()).then(data=>{
+    admin-ads.innerHTML="";
+    data.forEach(a=>{
+      const el=document.createElement("div");
+      el.className="glass";
+      el.innerHTML=`${a.route}
+        <button onclick="delAd(${a.id})">🗑</button>`;
+      admin-ads.appendChild(el);
+    });
+  });
+}
+function closeAdmin(){ admin.classList.add("hidden"); }
+function delAd(id){
+  fetch(`${API}/api/admin/ad/${id}?admin_id=${ADMIN_ID}`,{method:"DELETE"})
+    .then(()=>openAdmin());
+}
+
