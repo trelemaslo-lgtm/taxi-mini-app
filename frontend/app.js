@@ -4,8 +4,8 @@
  *************************************************/
 
 // ===== CONFIG =====
-const API_URL = "https://YOUR-BACKEND.onrender.com"; // ← ОБЯЗАТЕЛЬНО ЗАМЕНИ
-const ADMIN_ID = 123456789; // ← твой Telegram user_id
+const API_URL = "https://taxi-backend-5kl2.onrender.com"; // ← ОБЯЗАТЕЛЬНО ЗАМЕНИ
+const ADMIN_ID =  6813692852; // ← твой Telegram user_id
 const ADS_TTL_MIN = 30;
 
 // ===== TELEGRAM =====
