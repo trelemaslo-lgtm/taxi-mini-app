@@ -1,98 +1,168 @@
 <!DOCTYPE html>
-<html lang="uz">
+<html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Ingichka Taksi</title>
-  <link rel="stylesheet" href="style.css"/>
+
+  <!-- Telegram Mini App -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Base styles (минимум, чтобы текст был ВИДЕН) -->
+  <style>
+    body {
+      margin: 0;
+      background: #0b0b0b;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    #loader .loading-text {
+      font-size: 22px;
+      color: #ffd600;
+      margin-bottom: 12px;
+    }
+
+    #loader .created {
+      font-size: 12px;
+      opacity: 0.6;
+    }
+
+    #app {
+      display: none;
+      padding-bottom: 80px;
+    }
+
+    .screen {
+      display: none;
+      padding: 16px;
+    }
+
+    .screen h2 {
+      margin-top: 0;
+    }
+
+    .ad-card {
+      background: rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      background: rgba(0,0,0,0.9);
+      display: flex;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .bottom-nav button {
+      flex: 1;
+      background: none;
+      border: none;
+      color: #ffd600;
+      font-size: 20px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      border: none;
+    }
+
+    button.primary {
+      width: 100%;
+      padding: 14px;
+      background: #ffd600;
+      color: #000;
+      border-radius: 14px;
+      border: none;
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
 
-<div id="noise"></div>
+<!-- ================= LOADER ================= -->
+<div id="loader">
+  <div class="loading-text">LOADING</div>
+  <div class="created">created by 711 GROUP</div>
+</div>
 
+<!-- ================= APP ================= -->
 <div id="app">
 
-  <!-- LOADING -->
-  <section id="loading" class="screen active">
-    <div class="road">
-      <div class="car">
-        <div class="headlights"></div>
-        <div class="shadow"></div>
-      </div>
+  <!-- ===== HOME ===== -->
+  <div id="screen-home" class="screen">
+    <h2>Объявления</h2>
+    <div id="ads-list"></div>
+  </div>
+
+  <!-- ===== ADD AD ===== -->
+  <div id="screen-add" class="screen">
+    <h2>Разместить объявление</h2>
+    <p>Нажми кнопку ниже и заполни данные</p>
+    <button class="primary" onclick="createAd()">Создать объявление</button>
+  </div>
+
+  <!-- ===== PROFILE ===== -->
+  <div id="screen-profile" class="screen">
+    <h2>Профиль</h2>
+
+    <input id="profile-name" placeholder="Имя" />
+    <input id="profile-phone" placeholder="Телефон" />
+    <input id="profile-car" placeholder="Номер машины (если водитель)" />
+
+    <button class="primary" onclick="saveProfile()">Сохранить профиль</button>
+
+    <hr style="margin:20px 0; opacity:.2">
+
+    <div>
+      <p><b id="p-name"></b></p>
+      <p id="p-phone"></p>
+      <p id="p-car"></p>
+      <p>⭐ <span id="p-rating">5</span></p>
     </div>
-    <div class="loading-text" id="loadingText">Yuklanmoqda…</div>
-    <div class="created">created by 711 GROUP</div>
-  </section>
+  </div>
 
-  <!-- LANGUAGE -->
-  <section id="language" class="screen">
-    <h2 data-i18n="lang_title"></h2>
-    <button onclick="setLang('uz')">O‘zbek</button>
-    <button onclick="setLang('ru')">Русский</button>
-    <button onclick="setLang('uzk')">Ўзбекча</button>
-  </section>
+  <!-- ===== SETTINGS ===== -->
+  <div id="screen-settings" class="screen">
+    <h2>Настройки</h2>
+    <p>Язык</p>
+    <p>Уведомления</p>
+    <p>О нас</p>
+    <p>Донат</p>
+  </div>
 
-  <!-- ROLE -->
-  <section id="role" class="screen">
-    <h2 data-i18n="role_title"></h2>
-    <button onclick="setRole('driver')">🚕 <span data-i18n="driver"></span></button>
-    <button onclick="setRole('client')">👤 <span data-i18n="client"></span></button>
-  </section>
-
-  <!-- PROFILE SETUP -->
-  <section id="profileSetup" class="screen">
-    <h2 data-i18n="profile_title"></h2>
-    <input id="name" data-i18n-ph="name"/>
-    <input id="phone" data-i18n-ph="phone"/>
-    <input id="car" data-i18n-ph="car"/>
-    <button onclick="saveProfile()" data-i18n="continue"></button>
-  </section>
-
-  <!-- HOME -->
-  <section id="home" class="screen">
-    <h2 data-i18n="ads"></h2>
-    <div id="adsList"></div>
-  </section>
-
-  <!-- PROFILE -->
-  <section id="profile" class="screen">
-    <div class="profile-card">
-      <div class="avatar"></div>
-      <h3 id="pName"></h3>
-      <p id="pPhone"></p>
-      <p id="pCar"></p>
-      <p>⭐ <span id="pRating">5</span></p>
-    </div>
-  </section>
-
-  <!-- SETTINGS -->
-  <section id="settings" class="screen">
-    <h2 data-i18n="settings"></h2>
-    <button onclick="go('language')" data-i18n="language"></button>
-    <button data-i18n="notifications"></button>
-    <button data-i18n="donate"></button>
-    <button onclick="go('about')" data-i18n="about"></button>
-  </section>
-
-  <!-- ABOUT -->
-  <section id="about" class="screen">
-    <div class="about-card">
-      <h2>Ingichka Taksi</h2>
-      <p data-i18n="about_text"></p>
-      <div class="created">created by 711 GROUP</div>
-    </div>
-  </section>
+  <!-- ===== BOTTOM NAV ===== -->
+  <div class="bottom-nav">
+    <button id="nav-home">🏠</button>
+    <button id="nav-add">➕</button>
+    <button id="nav-profile">👤</button>
+    <button id="nav-settings">⚙️</button>
+  </div>
 
 </div>
 
-<nav class="tabbar">
-  <button onclick="go('home')">🏠</button>
-  <button onclick="createAd()">➕</button>
-  <button onclick="go('profile')">👤</button>
-  <button onclick="go('settings')">⚙️</button>
-</nav>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- ================= APP LOGIC ================= -->
 <script src="app.js"></script>
+
 </body>
 </html>
