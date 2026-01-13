@@ -17,7 +17,6 @@ body {
   align-items: center;
   justify-content: center;
 }
-
 .loading-text { font-size: 22px; color: #ffd600; }
 .loading-sub { font-size: 12px; opacity: 0.6; }
 
@@ -57,14 +56,13 @@ button {
   border: none;
   font-size: 16px;
 }
-
 .main-btn, .lang-btn {
   background: #ffd600;
   color: #000;
   font-weight: 700;
 }
 
-/* SETTINGS */
+/* SETTINGS BUTTONS */
 .settings-btn {
   width: 100%;
   padding: 16px;
@@ -77,19 +75,12 @@ button {
   font-weight: 700;
 }
 
-.settings-note {
-  margin-top: 14px;
-  opacity: 0.7;
-  font-size: 13px;
-}
-
 /* TOGGLE */
 .toggle-row {
   display: flex;
   gap: 10px;
   margin: 10px 0 16px;
 }
-
 .toggle-btn {
   flex: 1;
   padding: 12px;
@@ -99,7 +90,6 @@ button {
   color: #fff;
   font-weight: 600;
 }
-
 .toggle-btn.active {
   background: #ffd600;
   color: #000;
@@ -113,25 +103,21 @@ button {
   padding: 14px;
   margin-bottom: 12px;
 }
-
 .ad-title {
   font-weight: 700;
   margin-bottom: 6px;
   color: #ffd600;
 }
-
 .ad-row {
   font-size: 14px;
   opacity: 0.9;
   margin: 4px 0;
 }
-
 .ad-actions {
   display: flex;
   gap: 10px;
   margin-top: 10px;
 }
-
 .ad-actions a, .ad-actions button {
   flex: 1;
   padding: 12px;
@@ -141,16 +127,68 @@ button {
   text-decoration: none;
   font-weight: 700;
 }
-
-.call-btn {
-  background: #ffd600;
-  color: #000;
-}
-
+.call-btn { background: #ffd600; color: #000; }
 .msg-btn {
   background: rgba(255,255,255,0.08);
   color: #fff;
   border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* SETTINGS GEO TOGGLE */
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  margin: 10px 0;
+}
+.settings-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-icon { font-size: 18px; }
+.settings-hint { margin-top: 10px; font-size: 13px; opacity: 0.7; }
+
+/* Toggle */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(255,255,255,0.15);
+  transition: .2s;
+  border-radius: 999px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background: rgba(255, 215, 0, 0.95);
+  transition: .2s;
+  border-radius: 50%;
+}
+.switch input:checked + .slider {
+  background-color: rgba(255, 215, 0, 0.25);
+}
+.switch input:checked + .slider:before {
+  transform: translateX(22px);
 }
 
 /* BOTTOM NAV */
@@ -164,7 +202,6 @@ button {
   border-top: 1px solid rgba(255,255,255,0.1);
   display: flex;
 }
-
 .bottom-nav button {
   flex: 1;
   background: none;
