@@ -1,146 +1,473 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uz">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Ingichka Taksi</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="style.css?v=1" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
+
 <body>
 
-<!-- LOADING -->
-<div id="loading">
-  <div class="loading-text">LOADING</div>
-  <div class="loading-sub">created by 711 GROUP</div>
-</div>
+  <!-- BACKGROUND LAYERS -->
+  <div class="bg"></div>
+  <div class="grain"></div>
 
-<!-- APP -->
-<div id="app">
-
-  <!-- LANGUAGE -->
-  <section id="screen-language" class="screen">
-    <h1>Tilni tanlang</h1>
-    <button class="lang-btn" data-lang="uz">O‘zbek</button>
-    <button class="lang-btn" data-lang="ru">Русский</button>
-    <button class="lang-btn" data-lang="uzk">Ўzbekcha</button>
-  </section>
-
-  <!-- ROLE -->
-  <section id="screen-role" class="screen">
-    <h1>Rolni tanlang</h1>
-    <button class="main-btn" onclick="selectRole('driver')">🚕 Haydovchi</button>
-    <button class="main-btn" onclick="selectRole('client')">👤 Mijoz</button>
-  </section>
-
-  <!-- HOME -->
-  <section id="screen-home" class="screen">
-    <h1>🏠 E’lonlar</h1>
-
-    <div class="toggle-row">
-      <button class="toggle-btn active" id="tab-driver" onclick="setAdsTab('driver')">
-        🚕 Haydovchi
-      </button>
-      <button class="toggle-btn" id="tab-client" onclick="setAdsTab('client')">
-        👤 Mijoz
-      </button>
+  <!-- LOADING -->
+  <div id="loading" class="loading active">
+    <div class="loading-card">
+      <div class="taxi-road">
+        <div class="taxi-car"></div>
+      </div>
+      <div class="loading-text">LOADING</div>
+      <div class="loading-sub">created by <b>711 GROUP</b></div>
     </div>
+  </div>
 
-    <div id="ads-list"></div>
-    <p id="empty-ads" class="muted" style="display:none;">
-      Hozircha e’lonlar yo‘q.
-    </p>
-  </section>
+  <!-- APP ROOT -->
+  <div id="app" class="app">
 
-  <!-- ADD -->
-  <section id="screen-add" class="screen">
-    <h1>➕ E’lon joylash</h1>
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">🚕</div>
+        <div class="brand-title">Ingichka Taksi</div>
+      </div>
+      <button class="icon-btn" onclick="openSheet('settingsSheet')" aria-label="Settings">
+        ⚙️
+      </button>
+    </header>
 
-    <div class="muted">Marshrut: A → B</div>
-    <input id="ad-from" placeholder="TOCHKA A (Qayerdan)" />
-    <input id="ad-to" placeholder="TOCHKA B (Qayerga)" />
+    <!-- SCREENS -->
+    <main class="screens">
 
-    <div class="muted">Yo‘l turi</div>
-    <select id="ad-type">
-      <option value="now">✅ SRAZU EDEM</option>
-      <option value="20min">⏳ 20 daqiqa ichida</option>
-      <option value="full">👥 4 odam to‘lganda</option>
-    </select>
+      <!-- SCREEN: LANGUAGE -->
+      <section id="screen-language" class="screen active">
+        <div class="center-card glass">
+          <h1 class="title" data-i18n="choose_lang">Tilni tanlang</h1>
 
-    <input id="ad-price" placeholder="Narx (haydovchi yozadi)" />
-    <input id="ad-seats" placeholder="Bo‘sh joylar (1-4)" />
+          <div class="stack">
+            <button class="btn primary" onclick="setLang('uz')">O‘zbek</button>
+            <button class="btn" onclick="setLang('ru')">Русский</button>
+            <button class="btn" onclick="setLang('uzk')">Ўзбекча</button>
+          </div>
 
-    <button class="main-btn" onclick="createAd()">📢 Joylash</button>
+          <p class="muted" data-i18n="lang_hint">
+            Tilni keyin sozlamalardan o‘zgartirsa bo‘ladi.
+          </p>
+        </div>
+      </section>
 
-    <p class="muted">E’lon 60 daqiqadan keyin avtomatik o‘chadi</p>
-  </section>
+      <!-- SCREEN: ROLE -->
+      <section id="screen-role" class="screen">
+        <div class="center-card glass">
+          <h1 class="title" data-i18n="choose_role">Rolin tanlang</h1>
 
-  <!-- PROFILE -->
-  <section id="screen-profile" class="screen">
-    <h1>👤 Profil</h1>
+          <div class="stack">
+            <button class="btn primary" onclick="selectRole('driver')">🚘 <span data-i18n="role_driver">Haydovchi</span></button>
+            <button class="btn" onclick="selectRole('client')">👤 <span data-i18n="role_client">Mijoz</span></button>
+          </div>
 
-    <input id="profile-name" placeholder="Ism Familiya" />
-    <input id="profile-phone" placeholder="Telefon raqam" />
-    <input id="profile-car" placeholder="Mashina raqami (haydovchi)" />
+          <button class="link" onclick="goBackTo('screen-language')">← <span data-i18n="back">Orqaga</span></button>
+        </div>
+      </section>
 
-    <button class="main-btn" onclick="saveProfile()">Saqlash</button>
+      <!-- SCREEN: PROFILE SETUP -->
+      <section id="screen-profile" class="screen">
+        <div class="sheet glass">
+          <h2 class="sheet-title" data-i18n="profile_setup">Profilni to‘ldirish</h2>
 
-    <hr class="line"/>
+          <div class="form-grid">
+            <label class="field">
+              <span data-i18n="full_name">Ism familiya</span>
+              <input id="p-name" placeholder="Temur Qodirov" />
+            </label>
 
-    <div id="profile-view" style="display:none;">
-      <p><b>Ism:</b> <span id="view-name"></span></p>
-      <p><b>Telefon:</b> <span id="view-phone"></span></p>
-      <p id="view-car-wrap"><b>Mashina:</b> <span id="view-car"></span></p>
-      <p><b>⭐ Reyting:</b> <span id="view-rating"></span></p>
+            <label class="field">
+              <span data-i18n="phone">Telefon</span>
+              <input id="p-phone" placeholder="+998..." inputmode="tel" />
+            </label>
 
-      <button class="main-btn" onclick="editProfile()">✏️ Tahrirlash</button>
-    </div>
-  </section>
+            <div id="driver-extra" class="driver-extra">
+              <label class="field">
+                <span data-i18n="car_brand">Mashina markasi</span>
+                <input id="p-car-brand" placeholder="Chevrolet Nexia" />
+              </label>
 
-  <!-- SETTINGS -->
-  <section id="screen-settings" class="screen">
-    <h1>⚙️ Sozlamalar</h1>
+              <label class="field">
+                <span data-i18n="car_number">Mashina raqami</span>
+                <input id="p-car-number" placeholder="01ABC123" />
+              </label>
+            </div>
 
-    <button class="settings-btn" onclick="goToLanguage()">🌐 Tilni o‘zgartirish</button>
+            <label class="field">
+              <span data-i18n="photo_url">Foto (URL)</span>
+              <input id="p-photo" placeholder="https://..." />
+            </label>
 
-    <div class="settings-item">
-      <div class="settings-left">
-        <span class="settings-icon">📍</span>
-        <span class="settings-text">Geolokatsiya</span>
+            <label class="field">
+              <span data-i18n="about_short">Qisqa info</span>
+              <input id="p-bio" placeholder="..." />
+            </label>
+          </div>
+
+          <div class="row">
+            <button class="btn primary full" onclick="saveProfile()" data-i18n="continue">Davom etish</button>
+          </div>
+
+          <div class="row">
+            <button class="link" onclick="goBackTo('screen-role')">← <span data-i18n="back">Orqaga</span></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN: HOME / FEED -->
+      <section id="screen-home" class="screen">
+        <div class="tabs glass">
+          <button id="tabDrivers" class="tab active" onclick="switchFeed('drivers')">
+            🚘 <span data-i18n="drivers">Haydovchilar</span>
+          </button>
+          <button id="tabClients" class="tab" onclick="switchFeed('clients')">
+            👤 <span data-i18n="clients">Mijozlar</span>
+          </button>
+        </div>
+
+        <div class="feed-header glass">
+          <div class="feed-left">
+            <div class="mini" id="geoLine">📍 <span data-i18n="geo_off">Geolokatsiya: OFF</span></div>
+            <div class="mini" id="sortLine">↕️ <span data-i18n="sort_time">Saralash: vaqt</span></div>
+          </div>
+          <div class="feed-right">
+            <button class="chip" onclick="toggleSort()"><span data-i18n="sort">Saralash</span></button>
+            <button class="chip" onclick="openSheet('geoSheet')">📍 <span data-i18n="geo">Geo</span></button>
+          </div>
+        </div>
+
+        <div id="cards" class="cards">
+          <!-- skeleton -->
+          <div class="skeleton glass"></div>
+          <div class="skeleton glass"></div>
+          <div class="skeleton glass"></div>
+        </div>
+      </section>
+
+      <!-- SCREEN: PROFILE VIEW -->
+      <section id="screen-profile-view" class="screen">
+        <div class="profile glass">
+          <div class="profile-top">
+            <div class="avatar" id="avatar"></div>
+            <div class="profile-info">
+              <div class="p-name" id="pv-name">—</div>
+              <div class="p-sub" id="pv-phone">—</div>
+              <div class="p-sub" id="pv-car">—</div>
+            </div>
+          </div>
+
+          <div class="profile-stats">
+            <div class="stat glass-soft">
+              <div class="stat-label" data-i18n="rating">Reyting</div>
+              <div class="stat-value" id="pv-rating">0.0 ⭐</div>
+            </div>
+            <div class="stat glass-soft">
+              <div class="stat-label" data-i18n="points">Pointlar</div>
+              <div class="stat-value" id="pv-points">0 🏆</div>
+            </div>
+          </div>
+
+          <div class="profile-actions">
+            <button class="btn" onclick="openSheet('editProfileSheet')" data-i18n="edit_profile">Profilni tahrirlash</button>
+            <button class="btn" onclick="openSheet('myAdsSheet')" data-i18n="my_ads">Mening e’lonlarim</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN: ADMIN -->
+      <section id="screen-admin" class="screen">
+        <div class="sheet glass">
+          <h2 class="sheet-title">🛡 Admin</h2>
+          <p class="muted">Faqat siz uchun: e’lonlar nazorati / statistika.</p>
+
+          <div class="admin-grid">
+            <button class="btn" onclick="adminRefresh()">🔄 Refresh</button>
+            <button class="btn danger" onclick="adminClearAll()">🗑 Clear ALL</button>
+          </div>
+
+          <div class="mini muted" id="adminStats">—</div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom glass">
+      <button class="nav-btn active" id="navHome" onclick="nav('home')">
+        <div class="nav-ico">🏠</div>
+        <div class="nav-txt" data-i18n="nav_home">Bosh</div>
+      </button>
+
+      <button class="nav-btn" id="navCreate" onclick="openSheet('createAdSheet')">
+        <div class="nav-ico big">＋</div>
+        <div class="nav-txt" data-i18n="nav_create">Yaratish</div>
+      </button>
+
+      <button class="nav-btn" id="navProfile" onclick="nav('profile')">
+        <div class="nav-ico">👤</div>
+        <div class="nav-txt" data-i18n="nav_profile">Profil</div>
+      </button>
+
+      <button class="nav-btn" id="navSettings" onclick="openSheet('settingsSheet')">
+        <div class="nav-ico">⚙️</div>
+        <div class="nav-txt" data-i18n="nav_settings">Sozlamalar</div>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- ======= BOTTOM SHEETS ======= -->
+
+  <!-- CREATE AD SHEET -->
+  <div id="createAdSheet" class="sheet-wrap" onclick="sheetOutside(event,'createAdSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title" data-i18n="create_ad">E’lon yaratish</div>
+        <button class="icon-btn" onclick="closeSheet('createAdSheet')">✕</button>
       </div>
 
-      <label class="switch">
-        <input type="checkbox" id="geo-toggle" />
-        <span class="slider"></span>
-      </label>
+      <div class="form-grid compact">
+        <div class="row2">
+          <label class="field">
+            <span data-i18n="point_a">TOCHKA A</span>
+            <input id="ad-from" placeholder="Chirchiq" />
+          </label>
+          <label class="field">
+            <span data-i18n="point_b">TOCHKA B</span>
+            <input id="ad-to" placeholder="Sergeli" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span data-i18n="ad_type">Tur</span>
+          <select id="ad-type">
+            <option value="now" data-i18n="type_now">SRAZU EDI</option>
+            <option value="20" data-i18n="type_20">20 daqiqada</option>
+            <option value="fill" data-i18n="type_fill">Odam to‘lsa</option>
+          </select>
+        </label>
+
+        <div class="row2">
+          <label class="field">
+            <span data-i18n="price">Narx</span>
+            <input id="ad-price" placeholder="10000" inputmode="numeric" />
+          </label>
+          <label class="field">
+            <span data-i18n="seats">Bo‘sh joy</span>
+            <input id="ad-seats" placeholder="3" inputmode="numeric" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span data-i18n="comment">Izoh</span>
+          <input id="ad-comment" placeholder="..." />
+        </label>
+
+        <div class="row2">
+          <button class="btn primary" onclick="publishAd()" data-i18n="publish">E’lon berish</button>
+          <button class="btn" onclick="closeSheet('createAdSheet')" data-i18n="close">Yopish</button>
+        </div>
+
+        <p class="muted small" data-i18n="auto_delete">
+          E’lon 60 daqiqadan so‘ng avtomatik o‘chadi.
+        </p>
+      </div>
     </div>
+  </div>
 
-    <div class="settings-hint" id="geo-status">Geo: OFF</div>
+  <!-- SETTINGS SHEET -->
+  <div id="settingsSheet" class="sheet-wrap" onclick="sheetOutside(event,'settingsSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title" data-i18n="settings">Sozlamalar</div>
+        <button class="icon-btn" onclick="closeSheet('settingsSheet')">✕</button>
+      </div>
 
-    <button class="settings-btn" onclick="goToAbout()">ℹ️ Biz haqimizda</button>
-    <button class="settings-btn" onclick="supportCreators()">💛 Donat (711 GROUP)</button>
-  </section>
+      <div class="settings-list">
+        <button class="setting-item" onclick="openSheet('langSheet')">
+          🌐 <span data-i18n="language">Til</span>
+          <span class="right" id="langBadge">uz</span>
+        </button>
 
-  <!-- ABOUT -->
-  <section id="screen-about" class="screen">
-    <h1>ℹ️ Biz haqimizda</h1>
-    <p class="muted">
-      Ingichka Taksi — kichik shaharlar uchun lokal taksi platformasi.
-    </p>
-    <p class="muted">created by 711 GROUP</p>
-  </section>
+        <div class="setting-item">
+          🔔 <span data-i18n="notifications">Bildirishnomalar</span>
+          <label class="switch">
+            <input id="notifyToggle" type="checkbox" />
+            <span class="slider"></span>
+          </label>
+        </div>
 
-  <!-- BOTTOM NAV -->
-  <nav class="bottom-nav">
-    <button id="btn-home">🏠</button>
-    <button id="btn-add">➕</button>
-    <button id="btn-profile">👤</button>
-    <button id="btn-settings">⚙️</button>
-  </nav>
+        <button class="setting-item" onclick="openSheet('donateSheet')">
+          💛 <span data-i18n="donate">Donat</span>
+          <span class="right">711</span>
+        </button>
 
-</div>
+        <button class="setting-item" onclick="openSheet('aboutSheet')">
+          ✨ <span data-i18n="about">Biz haqimizda</span>
+          <span class="right">i</span>
+        </button>
 
-<script src="app.js?v=1" defer></script>
+        <button class="setting-item admin-only" onclick="nav('admin')">
+          🛡 Admin Panel
+          <span class="right">→</span>
+        </button>
+      </div>
+
+      <div class="sheet-foot muted small">
+        created by <b>711 GROUP</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- LANGUAGE SHEET -->
+  <div id="langSheet" class="sheet-wrap" onclick="sheetOutside(event,'langSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title" data-i18n="language">Til</div>
+        <button class="icon-btn" onclick="closeSheet('langSheet')">✕</button>
+      </div>
+      <div class="stack">
+        <button class="btn" onclick="setLang('uz'); closeSheet('langSheet')">O‘zbek</button>
+        <button class="btn" onclick="setLang('ru'); closeSheet('langSheet')">Русский</button>
+        <button class="btn" onclick="setLang('uzk'); closeSheet('langSheet')">Ўзбекча</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GEO SHEET -->
+  <div id="geoSheet" class="sheet-wrap" onclick="sheetOutside(event,'geoSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title">📍 <span data-i18n="geo">Geolokatsiya</span></div>
+        <button class="icon-btn" onclick="closeSheet('geoSheet')">✕</button>
+      </div>
+
+      <div class="setting-item">
+        📍 <span data-i18n="geo_enable">Geo yoqish</span>
+        <label class="switch">
+          <input id="geoToggle" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="mini muted" id="geoStatus">—</div>
+
+      <button class="btn" onclick="updateLocationNow()" data-i18n="geo_update">
+        Joylashuvni yangilash
+      </button>
+
+      <p class="muted small" data-i18n="geo_hint">
+        Geo yoqilsa, e’lonlar sizga yaqinligi bo‘yicha saralanadi.
+      </p>
+    </div>
+  </div>
+
+  <!-- ABOUT SHEET -->
+  <div id="aboutSheet" class="sheet-wrap" onclick="sheetOutside(event,'aboutSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title" data-i18n="about">Biz haqimizda</div>
+        <button class="icon-btn" onclick="closeSheet('aboutSheet')">✕</button>
+      </div>
+
+      <div class="about-card">
+        <div class="about-shape shape1"></div>
+        <div class="about-shape shape2"></div>
+
+        <h3>Ingichka Taksi</h3>
+        <p class="muted" data-i18n="about_text">
+          Bu mini-ilova kichik shahar uchun: tez e’lon, tez qo‘ng‘iroq, qulay tanlash.
+        </p>
+
+        <div class="about-pill">created by <b>711 GROUP</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DONATE SHEET -->
+  <div id="donateSheet" class="sheet-wrap" onclick="sheetOutside(event,'donateSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title" data-i18n="donate">Donat</div>
+        <button class="icon-btn" onclick="closeSheet('donateSheet')">✕</button>
+      </div>
+
+      <div class="donate-card glass-soft">
+        <h3>💛 711 GROUP</h3>
+        <p class="muted" data-i18n="donate_text">
+          Loyiha rivoji uchun qo‘llab-quvvatlang. Sizning donatingiz server va yangilanishlarga ketadi.
+        </p>
+
+        <button class="btn primary full" onclick="donateNow()" data-i18n="donate_btn">
+          Donat qilish
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT PROFILE -->
+  <div id="editProfileSheet" class="sheet-wrap" onclick="sheetOutside(event,'editProfileSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title" data-i18n="edit_profile">Profilni tahrirlash</div>
+        <button class="icon-btn" onclick="closeSheet('editProfileSheet')">✕</button>
+      </div>
+
+      <div class="form-grid compact">
+        <label class="field">
+          <span data-i18n="full_name">Ism familiya</span>
+          <input id="ep-name" />
+        </label>
+
+        <label class="field">
+          <span data-i18n="phone">Telefon</span>
+          <input id="ep-phone" />
+        </label>
+
+        <label class="field">
+          <span data-i18n="car_brand">Mashina markasi</span>
+          <input id="ep-car-brand" />
+        </label>
+
+        <label class="field">
+          <span data-i18n="car_number">Mashina raqami</span>
+          <input id="ep-car-number" />
+        </label>
+
+        <label class="field">
+          <span data-i18n="photo_url">Foto (URL)</span>
+          <input id="ep-photo" />
+        </label>
+
+        <div class="row2">
+          <button class="btn primary" onclick="saveProfileEdit()" data-i18n="save">Saqlash</button>
+          <button class="btn" onclick="closeSheet('editProfileSheet')" data-i18n="close">Yopish</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MY ADS -->
+  <div id="myAdsSheet" class="sheet-wrap" onclick="sheetOutside(event,'myAdsSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title" data-i18n="my_ads">Mening e’lonlarim</div>
+        <button class="icon-btn" onclick="closeSheet('myAdsSheet')">✕</button>
+      </div>
+
+      <div id="myAdsList" class="cards small-cards"></div>
+    </div>
+  </div>
+
+  <script defer src="./app.js"></script>
 </body>
 </html>
