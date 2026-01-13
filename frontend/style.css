@@ -668,3 +668,4 @@ body{ overflow-x:hidden; }
   20%{ opacity:1; }
   100%{ left: calc(100% + 40px); opacity:0; }
 }
+
