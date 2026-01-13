@@ -19,34 +19,64 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   window.showScreen = showScreen;
 
+  // ===== GEO HELPERS =====
+  function saveGeo(lat, lng) {
+    localStorage.setItem("geo", JSON.stringify({ lat, lng }));
+  }
+  function getGeo() {
+    try { return JSON.parse(localStorage.getItem("geo")); }
+    catch { return null; }
+  }
+  function distanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
   // ===== SETTINGS =====
   window.goToLanguage = () => showScreen("screen-language");
   window.goToAbout = () => showScreen("screen-about");
   window.supportCreators = () => alert("💛 Donat: 711 GROUP\nKeyin Click/Payme qo‘shamiz");
 
-  // ===== GEO =====
-  window.requestLocation = function () {
-    if (!navigator.geolocation) return alert("Geo yo‘q");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        localStorage.setItem("geo", JSON.stringify({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        }));
-        const st = document.getElementById("geo-status");
-        if (st) st.innerText = "✅ Geo: yoqilgan";
-        renderAds();
-      },
-      () => {
-        const st = document.getElementById("geo-status");
-        if (st) st.innerText = "❌ Geo: ruxsat yo‘q";
-      }
-    );
-  };
+  // ===== GEO TOGGLE =====
+  const geoToggle = document.getElementById("geo-toggle");
+  const geoStatus = document.getElementById("geo-status");
 
-  function getGeo() {
-    try { return JSON.parse(localStorage.getItem("geo")); }
-    catch { return null; }
+  function updateGeoUI() {
+    const geo = getGeo();
+    if (geoToggle) geoToggle.checked = !!geo;
+    if (geoStatus) geoStatus.innerText = geo ? "✅ Geo: ON" : "Geo: OFF";
+  }
+
+  if (geoToggle) {
+    geoToggle.checked = !!getGeo();
+
+    geoToggle.onchange = () => {
+      if (geoToggle.checked) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            saveGeo(pos.coords.latitude, pos.coords.longitude);
+            updateGeoUI();
+            renderAds();
+          },
+          () => {
+            geoToggle.checked = false;
+            updateGeoUI();
+            alert("Geo ruxsat bermadi ❌");
+          }
+        );
+      } else {
+        localStorage.removeItem("geo");
+        updateGeoUI();
+        renderAds();
+      }
+    };
   }
 
   // ===== LANGUAGE =====
@@ -60,8 +90,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===== ROLE =====
   window.selectRole = function(role) {
     localStorage.setItem("role", role);
+
     const carInput = document.getElementById("profile-car");
     if (carInput) carInput.style.display = role === "driver" ? "block" : "none";
+
     showScreen("screen-profile");
   };
 
@@ -129,107 +161,90 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAds();
   };
 
+  // ===== ADS STORAGE =====
   function loadAds() {
     try { return JSON.parse(localStorage.getItem("ads")) || []; }
     catch { return []; }
   }
-
   function saveAds(arr) {
     localStorage.setItem("ads", JSON.stringify(arr));
   }
 
-  // ===== CREATE AD (FIXED) =====
+  // ===== CREATE AD =====
   window.createAd = function () {
-    try {
-      const profileData = localStorage.getItem("profile");
-      if (!profileData) {
-        alert("❌ Avval profil to‘ldiring!");
-        showScreen("screen-profile");
-        return;
-      }
-
-      const profile = JSON.parse(profileData);
-      const role = localStorage.getItem("role") || "driver";
-
-      const fromEl = document.getElementById("ad-from");
-      const toEl = document.getElementById("ad-to");
-      const typeEl = document.getElementById("ad-type");
-      const priceEl = document.getElementById("ad-price");
-      const seatsEl = document.getElementById("ad-seats");
-
-      if (!fromEl || !toEl || !typeEl || !priceEl || !seatsEl) {
-        alert("❌ HTML id xato! inputlar topilmadi");
-        return;
-      }
-
-      const from = fromEl.value.trim();
-      const to = toEl.value.trim();
-      const type = typeEl.value;
-      const price = priceEl.value.trim();
-      const seats = seatsEl.value.trim();
-
-      if (!from || !to || !price) {
-        alert("❌ Qayerdan, qayerga va narx shart!");
-        return;
-      }
-
-      let seatsNum = parseInt(seats || "0", 10);
-      if (Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
-      if (seatsNum > 4) seatsNum = 4;
-
-      const geo = getGeo();
-
-      const ad = {
-        id: Date.now(),
-        kind: role,
-        from,
-        to,
-        type,
-        price,
-        seats: seatsNum,
-        name: profile.name,
-        phone: profile.phone,
-        car: profile.car || "",
-        createdAt: Date.now(),
-        lat: geo?.lat || null,
-        lng: geo?.lng || null
-      };
-
-      const ads = loadAds();
-      ads.push(ad);
-      saveAds(ads);
-
-      fromEl.value = "";
-      toEl.value = "";
-      priceEl.value = "";
-      seatsEl.value = "";
-
-      alert("✅ E’lon joylandi!");
-      showScreen("screen-home");
-      renderAds();
-    } catch (e) {
-      console.error("createAd ERROR:", e);
-      alert("❌ Xatolik! Console ni tekshir");
+    const profileData = localStorage.getItem("profile");
+    if (!profileData) {
+      alert("❌ Avval profil to‘ldiring!");
+      showScreen("screen-profile");
+      return;
     }
+
+    const profile = JSON.parse(profileData);
+    const role = localStorage.getItem("role") || "driver";
+
+    const fromEl = document.getElementById("ad-from");
+    const toEl = document.getElementById("ad-to");
+    const typeEl = document.getElementById("ad-type");
+    const priceEl = document.getElementById("ad-price");
+    const seatsEl = document.getElementById("ad-seats");
+
+    if (!fromEl || !toEl || !typeEl || !priceEl || !seatsEl) {
+      alert("❌ HTML id xato! inputlar topilmadi");
+      return;
+    }
+
+    const from = fromEl.value.trim();
+    const to = toEl.value.trim();
+    const type = typeEl.value;
+    const price = priceEl.value.trim();
+    const seats = seatsEl.value.trim();
+
+    if (!from || !to || !price) {
+      alert("❌ Qayerdan, qayerga va narx shart!");
+      return;
+    }
+
+    let seatsNum = parseInt(seats || "0", 10);
+    if (Number.isNaN(seatsNum)) seatsNum = 0;
+    if (seatsNum > 4) seatsNum = 4;
+    if (seatsNum < 0) seatsNum = 0;
+
+    const geo = getGeo();
+
+    const ad = {
+      id: Date.now(),
+      kind: role,
+      from,
+      to,
+      type,
+      price,
+      seats: seatsNum,
+      name: profile.name,
+      phone: profile.phone,
+      car: profile.car || "",
+      createdAt: Date.now(),
+      lat: geo?.lat || null,
+      lng: geo?.lng || null
+    };
+
+    const ads = loadAds();
+    ads.push(ad);
+    saveAds(ads);
+
+    fromEl.value = "";
+    toEl.value = "";
+    priceEl.value = "";
+    seatsEl.value = "";
+
+    alert("✅ E’lon joylandi!");
+    showScreen("screen-home");
+    renderAds();
   };
 
   // ===== AUTO DELETE 60 MIN =====
   function filterExpired(ads) {
     const now = Date.now();
     return ads.filter(a => now - a.createdAt < 60 * 60 * 1000);
-  }
-
-  // ===== DISTANCE =====
-  function distanceKm(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1 * Math.PI / 180) *
-      Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   // ===== RENDER ADS =====
@@ -246,8 +261,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const geo = getGeo();
     if (geo) {
       ads.forEach(a => {
-        if (a.lat && a.lng) a.dist = distanceKm(geo.lat, geo.lng, a.lat, a.lng);
-        else a.dist = 9999;
+        if (a.lat && a.lng) {
+          a.dist = distanceKm(geo.lat, geo.lng, a.lat, a.lng);
+        } else {
+          a.dist = 9999;
+        }
       });
       ads.sort((a, b) => a.dist - b.dist);
     }
@@ -265,7 +283,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const div = document.createElement("div");
       div.className = "ad-card";
 
-      const distText = (geo && ad.dist < 9999) ? `📍 ${ad.dist.toFixed(1)} km` : "";
+      const distText =
+        geo && ad.dist < 9999 ? `📍 ${ad.dist.toFixed(1)} km` : "";
 
       div.innerHTML = `
         <div class="ad-title">${ad.from} → ${ad.to}</div>
@@ -276,6 +295,55 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="ad-row">${distText}</div>
 
         <div class="ad-actions">
+          <a class="call-btn" href="tel:${ad.phone}">📞 Qo‘ng‘iroq</a>
+          <button class="msg-btn" onclick="sendTelegramMsg('${ad.phone}','${ad.name}')">💬 Telegram</button>
+        </div>
+      `;
+      box.appendChild(div);
+    });
+  }
+  window.renderAds = renderAds;
+
+  window.sendTelegramMsg = function(phone, name) {
+    alert("✅ Telegram xabar:\n" + name + "\n" + phone);
+  };
+
+  // ===== NAV =====
+  document.getElementById("btn-home").onclick = () => {
+    showScreen("screen-home");
+    renderAds();
+  };
+  document.getElementById("btn-add").onclick = () => showScreen("screen-add");
+  document.getElementById("btn-profile").onclick = () => {
+    showScreen("screen-profile");
+    renderProfile();
+  };
+  document.getElementById("btn-settings").onclick = () => {
+    showScreen("screen-settings");
+    updateGeoUI();
+  };
+
+  // ===== INIT FLOW =====
+  setTimeout(() => {
+    if (loading) loading.style.display = "none";
+    if (app) app.style.display = "block";
+
+    updateGeoUI();
+
+    const lang = localStorage.getItem("lang");
+    const role = localStorage.getItem("role");
+    const profile = localStorage.getItem("profile");
+
+    if (!lang) return showScreen("screen-language");
+    if (!role) return showScreen("screen-role");
+    if (!profile) return showScreen("screen-profile");
+
+    renderProfile();
+    showScreen("screen-home");
+    renderAds();
+  }, 900);
+});
+
           <a class="call-btn" href="tel:${ad.phone}">📞 Qo‘ng‘iroq</a>
           <button class="msg-btn" onclick="sendTelegramMsg('${ad.phone}','${ad.name}')">💬 Telegram</button>
         </div>
