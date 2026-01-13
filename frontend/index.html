@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Ingichka Taksi</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -37,43 +37,56 @@
   <!-- HOME -->
   <section id="screen-home" class="screen">
     <h1>🏠 Bosh sahifa</h1>
-    <p>Bu yerda e’lonlar bo‘ladi</p>
+    <p class="muted">Bu yerda e’lonlar bo‘ladi (keyingi bosqich)</p>
   </section>
 
   <!-- ADD -->
   <section id="screen-add" class="screen">
     <h1>➕ E’lon joylash</h1>
-    <p>Keyingi bosqichda</p>
+    <p class="muted">Keyingi bosqichda e’lon yaratish ishlaydi</p>
   </section>
 
- <!-- PROFILE -->
-<section id="screen-profile" class="screen">
-  <h1>👤 Profil</h1>
+  <!-- PROFILE -->
+  <section id="screen-profile" class="screen">
+    <h1>👤 Profil</h1>
 
-  <input id="profile-name" placeholder="Ism Familiya" />
-  <input id="profile-phone" placeholder="Telefon raqam" />
+    <input id="profile-name" placeholder="Ism Familiya" />
+    <input id="profile-phone" placeholder="Telefon raqam" />
+    <input id="profile-car" placeholder="Mashina raqami (haydovchi)" />
 
-  <!-- Только для водителя -->
-  <input id="profile-car" placeholder="Mashina raqami (haydovchi)" />
+    <button class="main-btn" onclick="saveProfile()">Saqlash</button>
 
-  <button class="main-btn" onclick="saveProfile()">Saqlash</button>
+    <hr class="line"/>
 
-  <hr />
+    <!-- VIEW PROFILE -->
+    <div id="profile-view" style="display:none;">
+      <p><b>Ism:</b> <span id="view-name"></span></p>
+      <p><b>Telefon:</b> <span id="view-phone"></span></p>
+      <p id="view-car-wrap"><b>Mashina:</b> <span id="view-car"></span></p>
 
-  <!-- Просмотр профиля -->
-  <div id="profile-view" style="display:none;">
-    <p><b>Ism:</b> <span id="view-name"></span></p>
-    <p><b>Telefon:</b> <span id="view-phone"></span></p>
-    <p id="view-car-wrap"><b>Mashina:</b> <span id="view-car"></span></p>
-
-    <button class="main-btn" onclick="editProfile()">✏️ Tahrirlash</button>
-  </div>
-</section>
+      <button class="main-btn" onclick="editProfile()">✏️ Tahrirlash</button>
+    </div>
+  </section>
 
   <!-- SETTINGS -->
   <section id="screen-settings" class="screen">
     <h1>⚙️ Sozlamalar</h1>
-    <p>Til, geo, info</p>
+
+    <button class="settings-btn" onclick="goToLanguage()">🌐 Tilni o‘zgartirish</button>
+    <button class="settings-btn" onclick="requestLocation()">📍 Geolokatsiyani yoqish</button>
+    <button class="settings-btn" onclick="goToAbout()">ℹ️ Biz haqimizda</button>
+    <button class="settings-btn" onclick="supportCreators()">💛 Donat (711 GROUP)</button>
+
+    <p class="settings-note" id="geo-status">📍 Geo: o‘chirilgan</p>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="screen-about" class="screen">
+    <h1>ℹ️ Biz haqimizda</h1>
+    <p class="muted">
+      Ingichka Taksi — kichik shaharlar uchun lokal taksi platformasi.
+    </p>
+    <p class="muted">created by 711 GROUP</p>
   </section>
 
   <!-- BOTTOM NAV -->
