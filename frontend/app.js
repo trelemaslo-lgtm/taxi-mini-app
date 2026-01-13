@@ -157,7 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const priceEl = document.getElementById("ad-price");
       const seatsEl = document.getElementById("ad-seats");
 
-      if (!fromEl  !toEl  !typeEl  !priceEl  !seatsEl) {
+      if (!fromEl || !toEl || !typeEl || !priceEl || !seatsEl) {
         alert("❌ HTML id xato! inputlar topilmadi");
         return;
       }
