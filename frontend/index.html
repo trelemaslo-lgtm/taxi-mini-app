@@ -24,7 +24,7 @@
     <h1>Tilni tanlang</h1>
     <button class="lang-btn" data-lang="uz">O‘zbek</button>
     <button class="lang-btn" data-lang="ru">Русский</button>
-    <button class="lang-btn" data-lang="uzk">Ўзбекча</button>
+    <button class="lang-btn" data-lang="uzk">Ўzbekcha</button>
   </section>
 
   <!-- ROLE -->
@@ -36,14 +36,44 @@
 
   <!-- HOME -->
   <section id="screen-home" class="screen">
-    <h1>🏠 Bosh sahifa</h1>
-    <p class="muted">Bu yerda e’lonlar bo‘ladi (keyingi bosqich)</p>
+    <h1>🏠 E’lonlar</h1>
+
+    <div class="toggle-row">
+      <button class="toggle-btn active" id="tab-driver" onclick="setAdsTab('driver')">
+        🚕 Haydovchi
+      </button>
+      <button class="toggle-btn" id="tab-client" onclick="setAdsTab('client')">
+        👤 Mijoz
+      </button>
+    </div>
+
+    <div id="ads-list"></div>
+    <p id="empty-ads" class="muted" style="display:none;">
+      Hozircha e’lonlar yo‘q.
+    </p>
   </section>
 
   <!-- ADD -->
   <section id="screen-add" class="screen">
     <h1>➕ E’lon joylash</h1>
-    <p class="muted">Keyingi bosqichda e’lon yaratish ishlaydi</p>
+
+    <div class="muted">Marshrut: A → B</div>
+    <input id="ad-from" placeholder="TOCHKA A (Qayerdan)" />
+    <input id="ad-to" placeholder="TOCHKA B (Qayerga)" />
+
+    <div class="muted">Yo‘l turi</div>
+    <select id="ad-type">
+      <option value="now">✅ SRAZU EDEM</option>
+      <option value="20min">⏳ 20 daqiqa ichida</option>
+      <option value="full">👥 4 odam to‘lganda</option>
+    </select>
+
+    <input id="ad-price" placeholder="Narx (haydovchi yozadi)" />
+    <input id="ad-seats" placeholder="Bo‘sh joylar (1-4)" />
+
+    <button class="main-btn" onclick="createAd()">📢 Joylash</button>
+
+    <p class="muted">E’lon 60 daqiqadan keyin avtomatik o‘chadi</p>
   </section>
 
   <!-- PROFILE -->
@@ -58,11 +88,11 @@
 
     <hr class="line"/>
 
-    <!-- VIEW PROFILE -->
     <div id="profile-view" style="display:none;">
       <p><b>Ism:</b> <span id="view-name"></span></p>
       <p><b>Telefon:</b> <span id="view-phone"></span></p>
       <p id="view-car-wrap"><b>Mashina:</b> <span id="view-car"></span></p>
+      <p><b>⭐ Reyting:</b> <span id="view-rating"></span></p>
 
       <button class="main-btn" onclick="editProfile()">✏️ Tahrirlash</button>
     </div>
