@@ -22,7 +22,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const screens = document.querySelectorAll(".screen");
-  console.log("Screens found:", screens.length);
 
   function showScreen(id) {
     screens.forEach(s => s.classList.remove("active"));
@@ -34,7 +33,49 @@ document.addEventListener("DOMContentLoaded", () => {
     el.classList.add("active");
   }
 
-  // ====== PROFILE FUNCTIONS (GLOBAL) ======
+  window.showScreen = showScreen;
+
+  // ===== SETTINGS FUNCTIONS =====
+  window.goToLanguage = function () {
+    showScreen("screen-language");
+  };
+
+  window.goToAbout = function () {
+    showScreen("screen-about");
+  };
+
+  window.supportCreators = function () {
+    alert("💛 Donat: 711 GROUP\nKeyin Click/Payme qo‘shamiz");
+  };
+
+  // ===== GEOLOCATION =====
+  window.requestLocation = function () {
+    if (!navigator.geolocation) {
+      alert("Geolokatsiya qo‘llab-quvvatlanmaydi");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        localStorage.setItem("geo", JSON.stringify({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        }));
+
+        const geoStatus = document.getElementById("geo-status");
+        if (geoStatus) geoStatus.innerText = "✅ Geo: yoqilgan";
+
+        alert("✅ Geolokatsiya yoqildi");
+      },
+      () => {
+        const geoStatus = document.getElementById("geo-status");
+        if (geoStatus) geoStatus.innerText = "❌ Geo: ruxsat berilmadi";
+        alert("❌ Geolokatsiya ruxsat berilmadi");
+      }
+    );
+  };
+
+  // ===== PROFILE FUNCTIONS =====
   window.saveProfile = function () {
     try {
       const name = document.getElementById("profile-name").value.trim();
@@ -82,8 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // hide inputs after save
     document.getElementById("profile-name").style.display = "none";
     document.getElementById("profile-phone").style.display = "none";
-    document.getElementById("profile-car").style.display =
-      localStorage.getItem("role") === "driver" ? "none" : "none";
+    document.getElementById("profile-car").style.display = "none";
 
     view.style.display = "block";
   }
@@ -99,18 +139,18 @@ document.addEventListener("DOMContentLoaded", () => {
       role === "driver" ? "block" : "none";
   };
 
-  // ====== ROLE FUNCTION (GLOBAL) ======
+  // ===== ROLE FUNCTION =====
   window.selectRole = function (role) {
     console.log("ROLE SELECTED:", role);
     localStorage.setItem("role", role);
-    showScreen("screen-profile");
 
-    // show/hide car input depending on role
     const carInput = document.getElementById("profile-car");
     if (carInput) carInput.style.display = role === "driver" ? "block" : "none";
+
+    showScreen("screen-profile");
   };
 
-  // ====== LANGUAGE BUTTONS ======
+  // ===== LANGUAGE BUTTONS =====
   document.querySelectorAll(".lang-btn").forEach(btn => {
     btn.onclick = () => {
       const lang = btn.dataset.lang;
@@ -120,23 +160,17 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   });
 
-  // ===== NAVIGATION (BOTTOM BAR) =====
-  const homeBtn = document.getElementById("btn-home");
-  const addBtn = document.getElementById("btn-add");
-  const profileBtn = document.getElementById("btn-profile");
-  const settingsBtn = document.getElementById("btn-settings");
-
-  if (homeBtn) homeBtn.onclick = () => showScreen("screen-home");
-  if (addBtn) addBtn.onclick = () => showScreen("screen-add");
-   if (profileBtn) profileBtn.onclick = () => {
+  // ===== NAVIGATION =====
+  document.getElementById("btn-home").onclick = () => showScreen("screen-home");
+  document.getElementById("btn-add").onclick = () => showScreen("screen-add");
+  document.getElementById("btn-profile").onclick = () => {
     showScreen("screen-profile");
     renderProfile();
   };
-  if (settingsBtn) settingsBtn.onclick = () => showScreen("screen-settings");
+  document.getElementById("btn-settings").onclick = () => showScreen("screen-settings");
 
-  // ====== INIT FLOW ======
+  // ===== INIT FLOW =====
   setTimeout(() => {
-    console.log("HIDE LOADING ✅");
     loading.style.display = "none";
     app.style.display = "block";
 
