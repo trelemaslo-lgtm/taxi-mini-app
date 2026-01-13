@@ -30,12 +30,13 @@ body {
   opacity: 0.6;
 }
 
-/* SCREENS */
+/* APP */
 #app {
   display: none;
   padding-bottom: 80px;
 }
 
+/* SCREENS */
 .screen {
   display: none;
   padding: 20px;
@@ -45,7 +46,31 @@ body {
   display: block;
 }
 
-/* BUTTONS */
+/* TEXT */
+.muted {
+  opacity: 0.6;
+  font-size: 14px;
+}
+
+.line {
+  border: none;
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+  margin: 18px 0;
+}
+
+/* INPUTS */
+input {
+  width: 100%;
+  padding: 14px;
+  margin: 10px 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+/* MAIN BUTTONS */
 button {
   width: 100%;
   padding: 14px;
@@ -59,7 +84,26 @@ button {
 .lang-btn {
   background: #ffd600;
   color: #000;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+/* SETTINGS BUTTONS */
+.settings-btn {
+  width: 100%;
+  padding: 16px;
+  margin: 10px 0;
+  border-radius: 16px;
+  border: none;
+  background: rgba(255, 214, 0, 0.95);
+  color: #000;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.settings-note {
+  margin-top: 14px;
+  opacity: 0.7;
+  font-size: 13px;
 }
 
 /* BOTTOM NAV */
