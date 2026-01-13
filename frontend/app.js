@@ -1,7 +1,6 @@
 console.log("APP JS LOADED ✅");
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Telegram safe init
   try {
     if (window.Telegram && Telegram.WebApp) {
       Telegram.WebApp.ready();
@@ -34,21 +33,20 @@ document.addEventListener("DOMContentLoaded", () => {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude
         }));
-        document.getElementById("geo-status").innerText = "✅ Geo: yoqilgan";
+        const st = document.getElementById("geo-status");
+        if (st) st.innerText = "✅ Geo: yoqilgan";
         renderAds();
       },
       () => {
-        document.getElementById("geo-status").innerText = "❌ Geo: ruxsat yo‘q";
+        const st = document.getElementById("geo-status");
+        if (st) st.innerText = "❌ Geo: ruxsat yo‘q";
       }
     );
   };
 
   function getGeo() {
-    try {
-      return JSON.parse(localStorage.getItem("geo"));
-    } catch {
-      return null;
-    }
+    try { return JSON.parse(localStorage.getItem("geo")); }
+    catch { return null; }
   }
 
   // ===== LANGUAGE =====
@@ -62,11 +60,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // ===== ROLE =====
   window.selectRole = function(role) {
     localStorage.setItem("role", role);
-
-    // show/hide car input
     const carInput = document.getElementById("profile-car");
     if (carInput) carInput.style.display = role === "driver" ? "block" : "none";
-
     showScreen("screen-profile");
   };
 
@@ -88,6 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("profile", JSON.stringify(profile));
     renderProfile();
     showScreen("screen-home");
+    renderAds();
   };
 
   function renderProfile() {
@@ -116,7 +112,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.editProfile = function () {
     document.getElementById("profile-view").style.display = "none";
-
     document.getElementById("profile-name").style.display = "block";
     document.getElementById("profile-phone").style.display = "block";
 
@@ -130,63 +125,92 @@ document.addEventListener("DOMContentLoaded", () => {
   window.setAdsTab = function(tab) {
     adsTab = tab;
     document.getElementById("tab-driver").classList.toggle("active", tab === "driver");
-     document.getElementById("tab-client").classList.toggle("active", tab === "client");
+    document.getElementById("tab-client").classList.toggle("active", tab === "client");
     renderAds();
   };
 
-  // ===== ADS STORAGE =====
   function loadAds() {
-    try {
-      return JSON.parse(localStorage.getItem("ads")) || [];
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(localStorage.getItem("ads")) || []; }
+    catch { return []; }
   }
 
   function saveAds(arr) {
     localStorage.setItem("ads", JSON.stringify(arr));
   }
 
-  // ===== CREATE AD =====
+  // ===== CREATE AD (FIXED) =====
   window.createAd = function () {
-    const profileData = localStorage.getItem("profile");
-    if (!profileData) return alert("Avval profil to‘ldiring!");
+    try {
+      const profileData = localStorage.getItem("profile");
+      if (!profileData) {
+        alert("❌ Avval profil to‘ldiring!");
+        showScreen("screen-profile");
+        return;
+      }
 
-    const profile = JSON.parse(profileData);
-    const role = localStorage.getItem("role");
+      const profile = JSON.parse(profileData);
+      const role = localStorage.getItem("role") || "driver";
 
-    const from = document.getElementById("ad-from").value.trim();
-    const to = document.getElementById("ad-to").value.trim();
-    const type = document.getElementById("ad-type").value;
-    const price = document.getElementById("ad-price").value.trim();
-    const seats = document.getElementById("ad-seats").value.trim();
+      const fromEl = document.getElementById("ad-from");
+      const toEl = document.getElementById("ad-to");
+      const typeEl = document.getElementById("ad-type");
+      const priceEl = document.getElementById("ad-price");
+      const seatsEl = document.getElementById("ad-seats");
 
-    if (!from  !to  !price) {
-      alert("Marshrut va narx shart!");
-      return;
+      if (!fromEl  !toEl  !typeEl  !priceEl  !seatsEl) {
+        alert("❌ HTML id xato! inputlar topilmadi");
+        return;
+      }
+
+      const from = fromEl.value.trim();
+      const to = toEl.value.trim();
+      const type = typeEl.value;
+      const price = priceEl.value.trim();
+      const seats = seatsEl.value.trim();
+
+      if (!from  !to  !price) {
+        alert("❌ Qayerdan, qayerga va narx shart!");
+        return;
+      }
+
+      let seatsNum = parseInt(seats || "0", 10);
+      if (Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
+      if (seatsNum > 4) seatsNum = 4;
+
+      const geo = getGeo();
+
+      const ad = {
+        id: Date.now(),
+        kind: role,
+        from,
+        to,
+        type,
+        price,
+        seats: seatsNum,
+        name: profile.name,
+        phone: profile.phone,
+        car: profile.car || "",
+        createdAt: Date.now(),
+        lat: geo?.lat || null,
+        lng: geo?.lng || null
+      };
+
+      const ads = loadAds();
+      ads.push(ad);
+      saveAds(ads);
+
+      fromEl.value = "";
+      toEl.value = "";
+      priceEl.value = "";
+      seatsEl.value = "";
+
+      alert("✅ E’lon joylandi!");
+      showScreen("screen-home");
+      renderAds();
+    } catch (e) {
+      console.error("createAd ERROR:", e);
+      alert("❌ Xatolik! Console ni tekshir");
     }
-
-    const geo = getGeo();
-
-    const ad = {
-      id: Date.now(),
-      kind: role, // driver/client
-      from, to, type, price, seats,
-      name: profile.name,
-      phone: profile.phone,
-      car: profile.car || "",
-      createdAt: Date.now(),
-      lat: geo?.lat || null,
-      lng: geo?.lng || null
-    };
-
-    const ads = loadAds();
-    ads.push(ad);
-    saveAds(ads);
-
-    alert("✅ E’lon joylandi!");
-    showScreen("screen-home");
-    renderAds();
   };
 
   // ===== AUTO DELETE 60 MIN =====
@@ -222,11 +246,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const geo = getGeo();
     if (geo) {
       ads.forEach(a => {
-        if (a.lat && a.lng) {
-          a.dist = distanceKm(geo.lat, geo.lng, a.lat, a.lng);
-        } else {
-          a.dist = 9999;
-        }
+        if (a.lat && a.lng) a.dist = distanceKm(geo.lat, geo.lng, a.lat, a.lng);
+        else a.dist = 9999;
       });
       ads.sort((a, b) => a.dist - b.dist);
     }
@@ -234,26 +255,24 @@ document.addEventListener("DOMContentLoaded", () => {
     box.innerHTML = "";
 
     if (ads.length === 0) {
-      empty.style.display = "block";
+      if (empty) empty.style.display = "block";
       return;
     } else {
-      empty.style.display = "none";
+      if (empty) empty.style.display = "none";
     }
 
     ads.forEach(ad => {
       const div = document.createElement("div");
       div.className = "ad-card";
 
-      const distText = (geo && ad.dist < 9999)
-        ? 📍 ${ad.dist.toFixed(1)} km
-        : "";
+      const distText = (geo && ad.dist < 9999) ? 📍 ${ad.dist.toFixed(1)} km : "";
 
       div.innerHTML = `
         <div class="ad-title">${ad.from} → ${ad.to}</div>
         <div class="ad-row">👤 ${ad.name}</div>
         <div class="ad-row">🚗 ${ad.car || "-"}</div>
         <div class="ad-row">💰 ${ad.price}</div>
-        <div class="ad-row">🪑 ${ad.seats || "-"}</div>
+        <div class="ad-row">🪑 ${ad.seats}</div>
         <div class="ad-row">${distText}</div>
 
         <div class="ad-actions">
@@ -261,31 +280,22 @@ document.addEventListener("DOMContentLoaded", () => {
           <button class="msg-btn" onclick="sendTelegramMsg('${ad.phone}','${ad.name}')">💬 Telegram</button>
         </div>
       `;
-
       box.appendChild(div);
     });
   }
   window.renderAds = renderAds;
 
-  // ===== SEND MESSAGE TO DRIVER/CLIENT =====
   window.sendTelegramMsg = function(phone, name) {
-    alert("✅ Bot orqali yuboriladi:\n" + name + "\n" + phone);
-    // Keyingi bosqichda backend orqali real message yuboramiz
+    alert("✅ Telegram xabar:\n" + name + "\n" + phone);
   };
 
   // ===== NAV =====
-  document.getElementById("btn-home").onclick = () => {
-    showScreen("screen-home");
-    renderAds();
-  };
+  document.getElementById("btn-home").onclick = () => { showScreen("screen-home"); renderAds(); };
   document.getElementById("btn-add").onclick = () => showScreen("screen-add");
-  document.getElementById("btn-profile").onclick = () => {
-    showScreen("screen-profile");
-    renderProfile();
-  };
+  document.getElementById("btn-profile").onclick = () => { showScreen("screen-profile"); renderProfile(); };
   document.getElementById("btn-settings").onclick = () => showScreen("screen-settings");
 
-  // ===== INIT FLOW =====
+  // ===== INIT =====
   setTimeout(() => {
     loading.style.display = "none";
     app.style.display = "block";
