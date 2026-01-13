@@ -140,75 +140,73 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ===== CREATE AD (FIXED) =====
   window.createAd = function () {
-  const profileData = localStorage.getItem("profile");
-  if (!profileData) {
-    alert("❌ Avval profil to‘ldiring!");
-    showScreen("screen-profile");
-    return;
-  }
+    try {
+      const profileData = localStorage.getItem("profile");
+      if (!profileData) {
+        alert("❌ Avval profil to‘ldiring!");
+        showScreen("screen-profile");
+        return;
+      }
 
-  const profile = JSON.parse(profileData);
-  const role = localStorage.getItem("role") || "driver";
+      const profile = JSON.parse(profileData);
+      const role = localStorage.getItem("role") || "driver";
 
-  const fromEl = document.getElementById("ad-from");
-  const toEl = document.getElementById("ad-to");
-  const typeEl = document.getElementById("ad-type");
-  const priceEl = document.getElementById("ad-price");
-  const seatsEl = document.getElementById("ad-seats");
+      const fromEl = document.getElementById("ad-from");
+      const toEl = document.getElementById("ad-to");
+      const typeEl = document.getElementById("ad-type");
+      const priceEl = document.getElementById("ad-price");
+      const seatsEl = document.getElementById("ad-seats");
 
-  if (!fromEl  !toEl  !typeEl  !priceEl  !seatsEl) {
-    alert("❌ HTML id xato! inputlar topilmadi");
-    return;
-  }
+      if (!fromEl || !toEl || !typeEl || !priceEl || !seatsEl) {
+        alert("❌ HTML id xato! inputlar topilmadi");
+        return;
+      }
 
-  const from = fromEl.value.trim();
-  const to = toEl.value.trim();
-  const type = typeEl.value;
-  const price = priceEl.value.trim();
-  const seats = seatsEl.value.trim();
+      const from = fromEl.value.trim();
+      const to = toEl.value.trim();
+      const type = typeEl.value;
+      const price = priceEl.value.trim();
+      const seats = seatsEl.value.trim();
 
-  if (!from || !to || !price) {
-  alert("❌ Qayerdan, qayerga va narx shart!");
-  return;
-}
+      if (!from || !to || !price) {
+        alert("❌ Qayerdan, qayerga va narx shart!");
+        return;
+      }
 
-  let seatsNum = parseInt(seats || "0", 10);
-  if (Number.isNaN(seatsNum)) seatsNum = 0;
-  if (seatsNum > 4) seatsNum = 4;
-  if (seatsNum < 0) seatsNum = 0;
+      let seatsNum = parseInt(seats || "0", 10);
+      if (Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
+      if (seatsNum > 4) seatsNum = 4;
 
-  let geo = null;
-  try { geo = JSON.parse(localStorage.getItem("geo")); } catch {}
+      const geo = getGeo();
 
-  const ad = {
-    id: Date.now(),
-    kind: role,
-    from,
-    to,
-    type,
-    price,
-    seats: seatsNum,
-    name: profile.name,
-    phone: profile.phone,
-    car: profile.car || "",
-    createdAt: Date.now(),
-    lat: geo?.lat || null,
-    lng: geo?.lng || null
-  };
+      const ad = {
+        id: Date.now(),
+        kind: role,
+        from,
+        to,
+        type,
+        price,
+        seats: seatsNum,
+        name: profile.name,
+        phone: profile.phone,
+        car: profile.car || "",
+        createdAt: Date.now(),
+        lat: geo?.lat || null,
+        lng: geo?.lng || null
+      };
 
-  const ads = JSON.parse(localStorage.getItem("ads") || "[]");
-  ads.push(ad);
-  localStorage.setItem("ads", JSON.stringify(ads));
+      const ads = loadAds();
+      ads.push(ad);
+      saveAds(ads);
 
-  fromEl.value = "";
-  toEl.value = "";
-  priceEl.value = "";
-  seatsEl.value = "";
+      fromEl.value = "";
+      toEl.value = "";
+      priceEl.value = "";
+      seatsEl.value = "";
 
-  alert("✅ E’lon joylandi!");
-  showScreen("screen-home");
-  renderAds();
-};
+      alert("✅ E’lon joylandi!");
+      showScreen("screen-home");
+      renderAds();
     } catch (e) {
       console.error("createAd ERROR:", e);
       alert("❌ Xatolik! Console ni tekshir");
@@ -267,7 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const div = document.createElement("div");
       div.className = "ad-card";
 
-      const distText = (geo && ad.dist < 9999) ? 📍 ${ad.dist.toFixed(1)} km : "";
+      const distText = (geo && ad.dist < 9999) ? `📍 ${ad.dist.toFixed(1)} km` : "";
 
       div.innerHTML = `
         <div class="ad-title">${ad.from} → ${ad.to}</div>
