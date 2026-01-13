@@ -167,10 +167,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const price = priceEl.value.trim();
   const seats = seatsEl.value.trim();
 
-  if (!from  !to  !price) {
-    alert("❌ Qayerdan, qayerga va narx shart!");
-    return;
-  }
+  if (!from || !to || !price) {
+  alert("❌ Qayerdan, qayerga va narx shart!");
+  return;
+}
 
   let seatsNum = parseInt(seats || "0", 10);
   if (Number.isNaN(seatsNum)) seatsNum = 0;
