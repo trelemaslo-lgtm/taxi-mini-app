@@ -512,9 +512,10 @@ async function loadAds(){
       return a.role === "client";
     });
 
-    /list = list.filter(a => {
-const from = String((a.from !== undefined && a.from !== null) ? a.from : (a.pointA || "")).trim();
-const to   = String((a.to   !== undefined && a.to   !== null) ? a.to   : (a.pointB || "")).trim();
+// route filter (fallback)
+list = list.filter(a => {
+  const from = String((a.from !== undefined && a.from !== null) ? a.from : (a.pointA || "")).trim();
+  const to   = String((a.to   !== undefined && a.to   !== null) ? a.to   : (a.pointB || "")).trim();
   return from.length > 0 && to.length > 0;
 });
 
