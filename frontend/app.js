@@ -680,7 +680,7 @@ window.publishAd = async ()=>{
     phone: profile.phone,
     carBrand: profile.carBrand || "",
     carNumber: profile.carNumber || "",
-    photo: profile.photo || "",
+    photo: (profile.photo && profile.photo.trim()) ? profile.photo.trim() : "",
 
     from,
     to,
