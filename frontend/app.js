@@ -386,7 +386,7 @@ window.saveProfile = ()=>{
   const phone = document.getElementById("p-phone")?.value.trim();
   const carBrand = document.getElementById("p-car-brand")?.value.trim();
   const carNumber = document.getElementById("p-car-number")?.value.trim();
-  const photo = document.getElementById("p-photo")?.value.trim();
+  const photo = (document.getElementById("p-photo")?.value || "").trim();
   const bio = document.getElementById("p-bio")?.value.trim();
 
   if(!name || !phone){
