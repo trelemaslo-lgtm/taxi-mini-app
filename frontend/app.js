@@ -401,7 +401,8 @@ window.goBackTo = (id)=> showScreen(id);
 window.saveProfile = async ()=>{
   const role = localStorage.getItem("role");
   const name = (document.getElementById("p-name")?.value || "").trim();
-  const phone = (document.getElementById("p-phone")?.value || "").trim();
+  let phone = (document.getElementById("p-phone")?.value || "").trim();
+phone = phone.replace(/\s+/g, "");
   const carBrand = (document.getElementById("p-car-brand")?.value || "").trim();
   const carNumber = (document.getElementById("p-car-number")?.value || "").trim();
   const photoUrl = (document.getElementById("p-photo")?.value || "").trim();
@@ -416,6 +417,10 @@ window.saveProfile = async ()=>{
     toast("❗ Mashina markasi va raqami shart!", true);
     return;
   }
+if(phone.length < 5){
+  alert("Telefon noto‘g‘ri!");
+  return;
+}
 
   // ✅ device upload
   let photo = photoUrl || "";
@@ -675,10 +680,16 @@ window.msgUser = (phone,name)=>{
 // ====== PUBLISH AD ======
 window.publishAd = async ()=>{
   const profile = getProfile();
-  if(!profile){
-    toast(t("need_profile"), true);
-    return;
-  }
+if(!profile){
+  toast(t("need_profile"), true);
+  return;
+}
+
+if(!profile.phone || String(profile.phone).trim().length < 5){
+  toast("❗ Telefon profilga kiritilmagan!", true);
+  nav("profile");
+  return;
+}
 
   const fromEl = document.getElementById("ad-from");
   const toEl = document.getElementById("ad-to");
