@@ -668,4 +668,10 @@ body{ overflow-x:hidden; }
   20%{ opacity:1; }
   100%{ left: calc(100% + 40px); opacity:0; }
 }
+.route-pill{
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
