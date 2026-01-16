@@ -1,6 +1,7 @@
 // ====== CONFIG ======
 const API = "https://taxi-backend-5kl2.onrender.com"; // <-- твой backend
 const AUTO_DELETE_SECONDS = 60 * 60; // 60 минут
+const AUTO_DELETE_MS = AUTO_DELETE_SECONDS * 1000;
 
 // ====== I18N ======
 const DICT = {
@@ -71,7 +72,7 @@ const DICT = {
     published_ok: "✅ E’lon joylandi",
     publish_error: "❌ E’lon berishda xatolik",
     need_profile: "❗ Profilni to‘ldiring",
-    fill_required: "❗ A, B va Narx shart!",
+    fill_required: "❗ Tочка A, B ва narx shart!",
   },
 
   ru: {
@@ -99,7 +100,7 @@ const DICT = {
 
     create_ad: "Создать объявление",
     point_a: "ТОЧКА А",
-    point_b: "ТОЧКА Б",
+    point_b: "ТОЧКА B",
     ad_type: "Тип",
     type_now: "СРАЗУ ЕДУ",
     type_20: "Через 20 минут",
@@ -168,8 +169,8 @@ const DICT = {
     sort_time: "Саралаш: вақт",
 
     create_ad: "Эълон яратиш",
-    point_a: "ТОЧКА A",
-    point_b: "ТОЧКА B",
+    point_a: "TOCHKA A",
+    point_b: "TOCHKA B",
     ad_type: "Тур",
     type_now: "ҲОЗИР ЙЎЛГА ЧИҚАМАН",
     type_20: "20 дақиқада",
@@ -225,6 +226,8 @@ function applyI18n(){
     const k = el.getAttribute("data-i18n");
     el.innerText = t(k);
   });
+
+  // lang badge (settings)
   const lang = localStorage.getItem("lang") || "uz";
   const badge = document.getElementById("langBadge");
   if(badge) badge.innerText = lang;
@@ -272,8 +275,6 @@ function getLikes(){
 function setLikes(obj){
   localStorage.setItem("likes", JSON.stringify(obj));
 }
-
-// points (sum of likes)
 function pointsForPhone(phone){
   const likes = getLikes();
   return likes[phone] || 0;
@@ -305,6 +306,72 @@ function distanceKm(lat1, lon1, lat2, lon2){
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// ====== SAFE ERROR ======
+window.onerror = function(msg){
+  try{
+    console.log("JS ERROR:", msg);
+  }catch(e){}
+};
+
+// ====== ADMIN ======
+const ADMIN_PHONE = "+998995575013"; // <-- твой номер (админ)
+
+function checkAdmin(){
+  try{
+    const p = getProfile();
+    const adminBtns = document.querySelectorAll(".admin-only");
+    adminBtns.forEach(btn=>{
+      if(p && p.phone === ADMIN_PHONE){
+        btn.style.display = "flex";
+      }else{
+        btn.style.display = "none";
+      }
+    });
+  }catch(e){
+    console.log("checkAdmin error", e);
+  }
+}
+
+// ====== NORMALIZER ======
+function normalizeAd(ad){
+  const role = ad.role || ad.userRole || "";
+
+  const name =
+    (ad.name || ad.full_name || ad.fullName || ad.username || "").toString().trim() ||
+    (role === "driver" ? "🚘 Haydovchi" : "👤 Mijoz");
+
+  const phone = (ad.phone || ad.tel || ad.contact || "").toString().trim();
+
+  const photo =
+    (ad.photo || ad.avatar || ad.image || ad.photo_url || ad.photoUrl || "").toString().trim();
+
+  const carBrand = (ad.carBrand || ad.car_brand || ad.brand || "").toString().trim();
+  const carNumber = (ad.carNumber || ad.car_number || ad.number || "").toString().trim();
+
+  const from =
+    (ad.from ?? ad.pointA ?? ad.a ?? ad.origin ?? ad.start ?? "").toString().trim();
+  const to =
+    (ad.to ?? ad.pointB ?? ad.b ?? ad.destination ?? ad.end ?? "").toString().trim();
+
+  const type = (ad.type || ad.tripType || "fill").toString();
+  const seats = ad.seats ?? ad.freeSeats ?? ad.places ?? 0;
+  const price = ad.price ?? ad.cost ?? ad.sum ?? "";
+
+  const comment = (ad.comment || ad.text || ad.note || "").toString().trim();
+
+  const lat = ad.lat ?? ad.latitude ?? null;
+  const lng = ad.lng ?? ad.longitude ?? null;
+
+  const created_at = ad.created_at || ad.createdAt || Date.now();
+
+  return {
+    role, name, phone, photo, carBrand, carNumber,
+    from, to, type, seats, price, comment,
+    lat, lng, created_at,
+    _raw: ad
+  };
+}
+
 // ====== BOOT ======
 document.addEventListener("DOMContentLoaded", async ()=>{
   // Telegram init safe
@@ -315,23 +382,18 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     }
   }catch(e){}
 
-  // hide loading after 900ms (nice)
+  // hide loading after 900ms
   setTimeout(()=>{
     document.getElementById("loading")?.classList.remove("active");
   }, 900);
 
-  // choose start screen logic
+  applyI18n();
+  checkAdmin();
+  initToggles();
+
   const lang = localStorage.getItem("lang");
   const role = localStorage.getItem("role");
   const profile = getProfile();
-
-  applyI18n();
-
-  // admin show
-  checkAdmin();
-
-  // toggles init
-  initToggles();
 
   if(!lang){
     showScreen("screen-language");
@@ -341,7 +403,6 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     showScreen("screen-profile");
     updateProfileUIRole();
   }else{
-    // app ready
     showScreen("screen-home");
     nav("home");
     await loadAds();
@@ -354,12 +415,16 @@ window.setLang = (lang)=>{
   localStorage.setItem("lang", lang);
   applyI18n();
 
-  // если язык выбирают в настройках — не выкидываем на старт
-  // если это первый запуск — идём на role
+  // ✅ убираем loading если висит
+  document.getElementById("loading")?.classList.remove("active");
+
   const role = localStorage.getItem("role");
   const profile = getProfile();
   if(!role) showScreen("screen-role");
-  else if(!profile) showScreen("screen-profile");
+  else if(!profile){
+    showScreen("screen-profile");
+    updateProfileUIRole();
+  }
 };
 
 // ====== ROLE ======
@@ -382,16 +447,23 @@ window.goBackTo = (id)=> showScreen(id);
 // ====== PROFILE SAVE ======
 window.saveProfile = ()=>{
   const role = localStorage.getItem("role");
-  const name = document.getElementById("p-name")?.value.trim();
-  const phone = document.getElementById("p-phone")?.value.trim();
-  const carBrand = document.getElementById("p-car-brand")?.value.trim();
-  const carNumber = document.getElementById("p-car-number")?.value.trim();
+  const name = (document.getElementById("p-name")?.value || "").trim();
+  const phone = (document.getElementById("p-phone")?.value || "").trim();
+  const carBrand = (document.getElementById("p-car-brand")?.value || "").trim();
+  const carNumber = (document.getElementById("p-car-number")?.value || "").trim();
   const photo = (document.getElementById("p-photo")?.value || "").trim();
-  const bio = document.getElementById("p-bio")?.value.trim();
+  const bio = (document.getElementById("p-bio")?.value || "").trim();
 
   if(!name || !phone){
-    alert(t("need_profile"));
+    toast(t("need_profile"), true);
     return;
+  }
+
+  if(role === "driver"){
+    if(!carBrand || !carNumber){
+      toast("❗ Mashina markasi va raqami shart!", true);
+      return;
+    }
   }
 
   const profile = {
@@ -405,6 +477,7 @@ window.saveProfile = ()=>{
   };
 
   setProfile(profile);
+  checkAdmin();
   showScreen("screen-home");
   nav("home");
   loadAds();
@@ -439,13 +512,16 @@ window.switchFeed = (mode)=>{
 
 // ====== SORT ======
 window.toggleSort = ()=>{
-  // if geo ON then distance, else time
   const geoOn = document.getElementById("geoToggle")?.checked;
-  if(geoOn){
-    SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
-  }else{
+
+  if(!geoOn){
     SORT_MODE = "time";
+    updateSortLine();
+    loadAds();
+    return;
   }
+
+  SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
   updateSortLine();
   loadAds();
 };
@@ -453,6 +529,7 @@ window.toggleSort = ()=>{
 function updateSortLine(){
   const el = document.getElementById("sortLine");
   if(!el) return;
+
   if(SORT_MODE==="distance"){
     el.innerHTML = `↕️ <span>${localStorage.getItem("lang")==="ru" ? "Сортировка: дистанция" : "Saralash: masofa"}</span>`;
   }else{
@@ -464,22 +541,7 @@ function updateSortLine(){
 async function loadAds(){
   const cards = document.getElementById("cards");
   if(!cards) return;
-// cleanup + filter by feed
-let list = Array.isArray(data) ? data : [];
 
-// feed mapping:
-list = list.filter(a => {
-  if(FEED_MODE==="drivers") return a.role === "driver";
-  return a.role === "client";
-});
-// ✅ показываем только объявления где есть маршрут A и B (чтобы выглядело идеально)
-list = list.filter(a => {
-  const from = String(a.from ?? a.pointA ?? a.a ?? "").trim();
-  const to   = String(a.to ?? a.pointB ?? a.b ?? "").trim();
-  return from.length > 1 && to.length > 1;
-});
-
-  // skeleton
   cards.innerHTML = `
     <div class="skeleton glass"></div>
     <div class="skeleton glass"></div>
@@ -490,83 +552,52 @@ list = list.filter(a => {
     const res = await fetch(API + "/api/ads");
     const data = await res.json();
 
-    // cleanup + filter by feed
     let list = Array.isArray(data) ? data : [];
 
-    // feed mapping:
-    // drivers feed shows driver ads
-    // clients feed shows client ads
+    // ✅ фильтруем по времени (60 минут)
+    list = list.filter(a => (Date.now() - (Number(a.created_at || a.createdAt || 0))) < AUTO_DELETE_MS);
+
+    // feed role filter
     list = list.filter(a => {
-      if(FEED_MODE==="drivers") return a.role === "driver";
-      return a.role === "client";
+      if(FEED_MODE==="drivers") return (a.role === "driver" || a.userRole === "driver");
+      return (a.role === "client" || a.userRole === "client");
     });
 
-    // sort
+    // ✅ скрываем объявления без маршрута (идеальный вид)
+    list = list.filter(a => {
+      const from = String(a.from ?? a.pointA ?? a.a ?? "").trim();
+      const to   = String(a.to ?? a.pointB ?? a.b ?? "").trim();
+      return from.length > 1 && to.length > 1;
+    });
+
+    // geo enabled?
     const geo = getGeo();
     const geoEnabled = !!geo && (document.getElementById("geoToggle")?.checked);
 
     if(SORT_MODE==="distance" && geoEnabled){
       list.sort((a,b)=>{
-        const da = (a.lat && a.lng) ? distanceKm(geo.lat, geo.lng, a.lat, a.lng) : 99999;
-        const db = (b.lat && b.lng) ? distanceKm(geo.lat, geo.lng, b.lat, b.lng) : 99999;
+        const A = normalizeAd(a);
+        const B = normalizeAd(b);
+        const da = (A.lat && A.lng) ? distanceKm(geo.lat, geo.lng, A.lat, A.lng) : 99999;
+        const db = (B.lat && B.lng) ? distanceKm(geo.lat, geo.lng, B.lat, B.lng) : 99999;
         return da - db;
       });
     }else{
-      list.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+      list.sort((a,b)=>(Number(b.created_at||b.createdAt||0))-(Number(a.created_at||a.createdAt||0)));
     }
 
-    // render
     if(list.length===0){
       cards.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
       return;
     }
 
     cards.innerHTML = "";
-    list.forEach(ad => cards.appendChild(renderCard(ad, geo)));
+    list.forEach(ad => cards.appendChild(renderCard(ad, geoEnabled ? geo : null)));
   }catch(e){
+    console.log("loadAds error:", e);
     cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ ${t("publish_error")}</div></div>`;
   }
 }
-function normalizeAd(ad){
-  const role = ad.role || ad.userRole || "";
-
-  const name =
-    (ad.name || ad.full_name || ad.fullName || ad.username || "").toString().trim() ||
-    (role === "driver" ? "🚘 Haydovchi" : "👤 Mijoz");
-
-  const phone = (ad.phone || ad.tel || ad.contact || "").toString().trim();
-
-  const photo =
-    (ad.photo || ad.avatar || ad.image || ad.photo_url || ad.photoUrl || "").toString().trim();
-
-  const carBrand = (ad.carBrand || ad.car_brand || ad.brand || "").toString().trim();
-  const carNumber = (ad.carNumber || ad.car_number || ad.number || "").toString().trim();
-
-  // маршрут (берём из разных вариантов)
-  const from =
-    (ad.from ?? ad.pointA ?? ad.a ?? ad.origin ?? ad.start ?? "").toString().trim();
-  const to =
-    (ad.to ?? ad.pointB ?? ad.b ?? ad.destination ?? ad.end ?? "").toString().trim();
-
-  const type = (ad.type || ad.tripType || "fill").toString();
-  const seats = ad.seats ?? ad.freeSeats ?? ad.places ?? 0;
-  const price = ad.price ?? ad.cost ?? ad.sum ?? "";
-
-  const comment = (ad.comment || ad.text || ad.note || "").toString().trim();
-
-  const lat = ad.lat ?? ad.latitude ?? null;
-  const lng = ad.lng ?? ad.longitude ?? null;
-
-  const created_at = ad.created_at || ad.createdAt || Date.now();
-
-  return {
-    role, name, phone, photo, carBrand, carNumber,
-    from, to, type, seats, price, comment,
-    lat, lng, created_at,
-    _raw: ad
-  };
-}
-
 
 // ====== RENDER CARD ======
 function renderCard(ad, geo){
@@ -578,36 +609,33 @@ function renderCard(ad, geo){
 
   const carLine = `${A.carBrand} ${A.carNumber}`.trim();
 
-  // ✅ фото (если нет — красивый аватар)
   const avatarHtml = A.photo
     ? `<div class="card-avatar" style="background-image:url('${escapeHtml(A.photo)}')"></div>`
     : `<div class="card-avatar" style="display:grid;place-items:center;font-size:18px;">👤</div>`;
 
-  // ✅ маршрут: если пусто — показываем “Не указано”
-  const fromText = A.from ? A.from : "📍 A: yozilmagan";
-  const toText = A.to ? A.to : "📍 B: yozilmagan";
+  const fromText = A.from || "—";
+  const toText = A.to || "—";
 
-  // ✅ тип
   const typeLabel = (()=>{
     if(A.type==="now") return t("type_now");
     if(A.type==="20") return t("type_20");
     return t("type_fill");
   })();
 
-  // ✅ дистанция
   let distHtml = "";
   if(geo && geo.lat && geo.lng && A.lat && A.lng){
     const d = distanceKm(geo.lat, geo.lng, A.lat, A.lng);
     if(Number.isFinite(d)) distHtml = `<div class="badge">📍 ${d.toFixed(1)} km</div>`;
   }
 
-  // ✅ время
+  // time
   let timeHtml = "";
-  if(A.created_at){
-    const mins = Math.floor((Date.now() - Number(A.created_at)) / 60000);
+  const created = Number(A.created_at || 0);
+  if(created){
+    const mins = Math.floor((Date.now() - created) / 60000);
     if(mins < 1) timeHtml = `<div class="card-sub">🟢 now</div>`;
-    else if(mins < 60) timeHtml = `<div class="card-sub">⏱ ${mins} min ago</div>`;
-    else timeHtml = `<div class="card-sub">⏱ ${Math.floor(mins/60)} h ago</div>`;
+    else if(mins < 60) timeHtml = `<div class="card-sub">⏱ ${mins} min</div>`;
+    else timeHtml = `<div class="card-sub">⏱ ${Math.floor(mins/60)} h</div>`;
   }
 
   card.innerHTML = `
@@ -651,15 +679,22 @@ function renderCard(ad, geo){
   return card;
 }
 
-
-
 // ====== LIKE ======
 window.likeDriver = (phone)=>{
   if(!phone) return;
+
+  // anti spam 3 sec
+  const lastKey = "like_last_" + phone;
+  const last = parseInt(localStorage.getItem(lastKey) || "0", 10);
+  if(Date.now() - last < 3000) return;
+  localStorage.setItem(lastKey, String(Date.now()));
+
   const likes = getLikes();
   likes[phone] = (likes[phone] || 0) + 1;
   setLikes(likes);
-  loadAds();
+
+  const onHome = document.getElementById("screen-home")?.classList.contains("active");
+  if(onHome) loadAds();
   renderProfileView();
 };
 
@@ -670,8 +705,6 @@ window.callPhone = (phone)=>{
 };
 
 window.msgUser = (phone,name)=>{
-  // В MiniApp можем открыть TG юзеру (если он поделился контактами – чаще всего нет).
-  // Поэтому делаем fallback: открыть чат с ботом и показать данные.
   try{
     if(window.Telegram && Telegram.WebApp){
       Telegram.WebApp.showPopup({
@@ -689,7 +722,7 @@ window.msgUser = (phone,name)=>{
 window.publishAd = async ()=>{
   const profile = getProfile();
   if(!profile){
-    alert(t("need_profile"));
+    toast(t("need_profile"), true);
     return;
   }
 
@@ -701,75 +734,57 @@ window.publishAd = async ()=>{
   const commentEl = document.getElementById("ad-comment");
 
   if(!fromEl || !toEl || !typeEl || !priceEl || !seatsEl){
-    alert("❌ HTML id xato!");
+    toast("❌ HTML id xato!", true);
     return;
   }
 
- const from = (fromEl.value || "").trim();
-const to = (toEl.value || "").trim();
-const type = typeEl.value;
-const price = (priceEl.value || "").trim();
-const seats = (seatsEl.value || "").trim();
-const comment = (commentEl?.value || "").trim();
+  const from = (fromEl.value || "").trim();
+  const to = (toEl.value || "").trim();
+  const type = typeEl.value;
+  const price = (priceEl.value || "").trim();
+  const seats = (seatsEl.value || "").trim();
+  const comment = (commentEl?.value || "").trim();
 
-// ✅ жёсткая проверка маршрута
-if(from.length < 2 || to.length < 2 || price.length < 1){
-  toast(t("fill_required"), true);
-  return;
-}
-
+  // ✅ маршрут обязателен
+  if(from.length < 2 || to.length < 2 || price.length < 1){
+    toast(t("fill_required"), true);
+    return;
+  }
 
   let seatsNum = parseInt(seats || "0", 10);
   if(Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
   if(seatsNum > 4) seatsNum = 4;
 
-  // attach geo if enabled
   const geoEnabled = document.getElementById("geoToggle")?.checked;
   const geo = geoEnabled ? getGeo() : null;
 
-const payload = {
-  // основа
-  role: profile.role,
-  name: (profile.name || "").trim(),
-  phone: (profile.phone || "").trim(),
-  carBrand: (profile.carBrand || "").trim(),
-  carNumber: (profile.carNumber || "").trim(),
-  photo: (profile.photo || "").trim(),
+  const payload = {
+    role: profile.role,
+    name: (profile.name || "").trim(),
+    phone: (profile.phone || "").trim(),
+    carBrand: (profile.carBrand || "").trim(),
+    carNumber: (profile.carNumber || "").trim(),
+    photo: (profile.photo || "").trim(),
 
-  // объявление
-  from,
-  to,
-  type,
-  price,
-  seats: seatsNum,
-  comment,
+    from,
+    to,
+    type,
+    price,
+    seats: seatsNum,
+    comment,
 
-  // geo
-  lat: geo?.lat || null,
-  lng: geo?.lng || null,
+    lat: geo?.lat || null,
+    lng: geo?.lng || null,
 
-  // ✅ дубли для любого backend (чтобы точно сохранилось)
-  full_name: (profile.name || "").trim(),
-  car_brand: (profile.carBrand || "").trim(),
-  car_number: (profile.carNumber || "").trim(),
-  photo_url: (profile.photo || "").trim(),
-  pointA: from,
-  pointB: to,
-  createdAt: Date.now()
-};
-
-
-  // ✅ дубли для совместимости с любым backend
-  full_name: profile.name,
-  car_brand: profile.carBrand || "",
-  car_number: profile.carNumber || "",
-  photo_url: profile.photo || "",
-  pointA: from,
-  pointB: to,
-  createdAt: Date.now(),
-};
-
- 
+    // ✅ дубли
+    full_name: (profile.name || "").trim(),
+    car_brand: (profile.carBrand || "").trim(),
+    car_number: (profile.carNumber || "").trim(),
+    photo_url: (profile.photo || "").trim(),
+    pointA: from,
+    pointB: to,
+    createdAt: Date.now()
+  };
 
   try{
     const r = await fetch(API + "/api/ads", {
@@ -791,6 +806,7 @@ const payload = {
     loadAds();
     renderMyAds();
   }catch(e){
+    console.log(e);
     toast(t("publish_error"), true);
   }
 };
@@ -805,8 +821,6 @@ function clearAdForm(){
 // ====== SETTINGS / DONATE ======
 window.donateNow = ()=>{
   toast("💛 711 GROUP");
-  // Можно добавить ссылку оплаты:
-  // window.open("https://payme.uz/...", "_blank");
 };
 
 // ====== TOAST ======
@@ -833,6 +847,7 @@ function renderProfileView(){
   if(avatar){
     if(p.photo){
       avatar.style.backgroundImage = `url('${p.photo}')`;
+      avatar.innerHTML = "";
     }else{
       avatar.style.backgroundImage = "";
       avatar.innerHTML = "👤";
@@ -850,12 +865,11 @@ function renderProfileView(){
   const pts = pointsForPhone(p.phone || "");
   document.getElementById("pv-points").innerText = `${pts} 🏆`;
 
-  // rating as simple: 4.0 + points/50 max 5.0
   let rating = 4.0 + (pts / 50);
   if(rating > 5.0) rating = 5.0;
   document.getElementById("pv-rating").innerText = `${rating.toFixed(1)} ⭐`;
 
-  // fill edit sheet inputs
+  // fill edit inputs
   document.getElementById("ep-name").value = p.name || "";
   document.getElementById("ep-phone").value = p.phone || "";
   document.getElementById("ep-car-brand").value = p.carBrand || "";
@@ -872,21 +886,22 @@ window.saveProfileEdit = ()=>{
 
   const np = {
     ...p,
-    name: document.getElementById("ep-name").value.trim(),
-    phone: document.getElementById("ep-phone").value.trim(),
-    carBrand: document.getElementById("ep-car-brand").value.trim(),
-    carNumber: document.getElementById("ep-car-number").value.trim(),
-    photo: document.getElementById("ep-photo").value.trim(),
+    name: (document.getElementById("ep-name")?.value || "").trim(),
+    phone: (document.getElementById("ep-phone")?.value || "").trim(),
+    carBrand: (document.getElementById("ep-car-brand")?.value || "").trim(),
+    carNumber: (document.getElementById("ep-car-number")?.value || "").trim(),
+    photo: (document.getElementById("ep-photo")?.value || "").trim(),
   };
 
   setProfile(np);
   closeSheet("editProfileSheet");
   toast("✅ Saved");
+  checkAdmin();
   renderProfileView();
   loadAds();
 };
 
-// ====== MY ADS (client-side filter) ======
+// ====== MY ADS ======
 async function renderMyAds(){
   const listEl = document.getElementById("myAdsList");
   if(!listEl) return;
@@ -897,7 +912,7 @@ async function renderMyAds(){
   try{
     const res = await fetch(API + "/api/ads");
     const data = await res.json();
-    const mine = (Array.isArray(data)?data:[]).filter(a => a.phone === p.phone);
+    const mine = (Array.isArray(data)?data:[]).filter(a => String(a.phone||"") === String(p.phone||""));
 
     if(mine.length===0){
       listEl.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
@@ -905,26 +920,29 @@ async function renderMyAds(){
     }
 
     listEl.innerHTML = "";
-    mine.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+    mine.sort((a,b)=>(Number(b.created_at||b.createdAt||0))-(Number(a.created_at||a.createdAt||0)));
+
     mine.forEach(ad=>{
+      const A = normalizeAd(ad);
       const div = document.createElement("div");
       div.className = "glass card";
       div.innerHTML = `
         <div class="card-body">
           <div class="route-line">
-            <span class="route-pill">${escapeHtml(ad.from||"")}</span>
+            <span class="route-pill">${escapeHtml(A.from||"")}</span>
             <span>→</span>
-            <span class="route-pill">${escapeHtml(ad.to||"")}</span>
+            <span class="route-pill">${escapeHtml(A.to||"")}</span>
           </div>
           <div class="card-info">
-            <div class="badge">💰 ${escapeHtml(String(ad.price||""))}</div>
-            <div class="badge">👥 ${escapeHtml(String(ad.seats||""))}</div>
+            <div class="badge">💰 ${escapeHtml(String(A.price||""))}</div>
+            <div class="badge">👥 ${escapeHtml(String(A.seats||""))}</div>
           </div>
         </div>
       `;
       listEl.appendChild(div);
     });
   }catch(e){
+    console.log(e);
     listEl.innerHTML = `<div class="glass card"><div class="muted">⚠️</div></div>`;
   }
 }
@@ -934,7 +952,6 @@ function initToggles(){
   const geoToggle = document.getElementById("geoToggle");
   const notifyToggle = document.getElementById("notifyToggle");
 
-  // notifications (fake setting)
   const notify = localStorage.getItem("notify") === "1";
   if(notifyToggle){
     notifyToggle.checked = notify;
@@ -943,7 +960,6 @@ function initToggles(){
     };
   }
 
-  // geo
   const geoSaved = !!getGeo();
   if(geoToggle){
     geoToggle.checked = geoSaved;
@@ -994,29 +1010,17 @@ function updateGeoLine(){
   const geoLine = document.getElementById("geoLine");
   if(!geoLine) return;
 
-  const geo = getGeo();
-  const on = !!geo;
-  if(on){
+  const toggle = document.getElementById("geoToggle");
+  const enabled = !!toggle?.checked;
+
+  if(enabled){
     geoLine.innerHTML = `📍 <span>${localStorage.getItem("lang")==="ru" ? "Геолокация: ON" : "Geolokatsiya: ON"}</span>`;
   }else{
     geoLine.innerHTML = `📍 <span data-i18n="geo_off">${t("geo_off")}</span>`;
   }
 }
 
-// ====== ADMIN (simple) ======
-const ADMIN_PHONE = "+9989955750132"; // <-- ТВОЙ номер (админ)
-function checkAdmin(){
-  const p = getProfile();
-  const adminBtn = document.querySelector(".admin-only");
-  if(!adminBtn) return;
-
-  if(p && p.phone === ADMIN_PHONE){
-    adminBtn.style.display = "flex";
-  }else{
-    adminBtn.style.display = "none";
-  }
-}
-
+// ====== ADMIN ======
 window.adminRefresh = async ()=>{
   try{
     const res = await fetch(API + "/api/ads");
