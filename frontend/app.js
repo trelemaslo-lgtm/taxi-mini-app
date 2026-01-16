@@ -32,7 +32,7 @@ const DICT = {
     point_a: "TOCHKA A",
     point_b: "TOCHKA B",
     ad_type: "Tur",
-    type_now: "SRAZU EDI",
+    type_now: "HOZIR KETAMIZ",
     type_20: "20 daqiqada",
     type_fill: "Odam to‘lsa",
     price: "Narx",
@@ -226,8 +226,6 @@ function applyI18n(){
     const k = el.getAttribute("data-i18n");
     el.innerText = t(k);
   });
-
-  // lang badge (settings)
   const lang = localStorage.getItem("lang") || "uz";
   const badge = document.getElementById("langBadge");
   if(badge) badge.innerText = lang;
@@ -265,22 +263,10 @@ window.closeSheet = closeSheet;
 window.sheetOutside = sheetOutside;
 
 // ====== STATE ======
-let FEED_MODE = "drivers"; // drivers | clients
-let SORT_MODE = "time";    // time | distance
+let FEED_MODE = "drivers";
+let SORT_MODE = "time";
 
-// likes saved locally
-function getLikes(){
-  try{ return JSON.parse(localStorage.getItem("likes")||"{}"); }catch{return {}}
-}
-function setLikes(obj){
-  localStorage.setItem("likes", JSON.stringify(obj));
-}
-function pointsForPhone(phone){
-  const likes = getLikes();
-  return likes[phone] || 0;
-}
-
-// profile
+// ====== PROFILE ======
 function getProfile(){
   try{ return JSON.parse(localStorage.getItem("profile")||"null"); }catch{return null}
 }
@@ -306,75 +292,52 @@ function distanceKm(lat1, lon1, lat2, lon2){
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// ====== SAFE ERROR ======
-window.onerror = function(msg){
-  try{
-    console.log("JS ERROR:", msg);
-  }catch(e){}
-};
-
-// ====== ADMIN ======
-const ADMIN_PHONE = "+998995575013"; // <-- твой номер (админ)
-
-function checkAdmin(){
-  try{
-    const p = getProfile();
-    const adminBtns = document.querySelectorAll(".admin-only");
-    adminBtns.forEach(btn=>{
-      if(p && p.phone === ADMIN_PHONE){
-        btn.style.display = "flex";
-      }else{
-        btn.style.display = "none";
-      }
-    });
-  }catch(e){
-    console.log("checkAdmin error", e);
-  }
+// ====== ESCAPE ======
+function escapeHtml(str){
+  return String(str || "").replace(/[&<>"']/g, s=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[s]));
+}
+function escapeJs(str){
+  return String(str||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 }
 
-// ====== NORMALIZER ======
-function normalizeAd(ad){
-  const role = ad.role || ad.userRole || "";
+// ====== TOAST ======
+function toast(msg, danger=false){
+  try{
+    if(window.Telegram && Telegram.WebApp){
+      Telegram.WebApp.showPopup({
+        title: danger ? "❌" : "✅",
+        message: msg,
+        buttons:[{type:"ok"}]
+      });
+      return;
+    }
+  }catch(e){}
+  alert(msg);
+}
 
-  const name =
-    (ad.name || ad.full_name || ad.fullName || ad.username || "").toString().trim() ||
-    (role === "driver" ? "🚘 Haydovchi" : "👤 Mijoz");
+// ====== BACKEND: LIKE / POINTS ======
+async function apiLike(phone){
+  if(!phone) return 0;
+  const r = await fetch(API + "/api/like", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ phone })
+  });
+  const j = await r.json().catch(()=>({}));
+  return j.likes || 0;
+}
 
-  const phone = (ad.phone || ad.tel || ad.contact || "").toString().trim();
-
-  const photo =
-    (ad.photo || ad.avatar || ad.image || ad.photo_url || ad.photoUrl || "").toString().trim();
-
-  const carBrand = (ad.carBrand || ad.car_brand || ad.brand || "").toString().trim();
-  const carNumber = (ad.carNumber || ad.car_number || ad.number || "").toString().trim();
-
-  const from =
-    (ad.from ?? ad.pointA ?? ad.a ?? ad.origin ?? ad.start ?? "").toString().trim();
-  const to =
-    (ad.to ?? ad.pointB ?? ad.b ?? ad.destination ?? ad.end ?? "").toString().trim();
-
-  const type = (ad.type || ad.tripType || "fill").toString();
-  const seats = ad.seats ?? ad.freeSeats ?? ad.places ?? 0;
-  const price = ad.price ?? ad.cost ?? ad.sum ?? "";
-
-  const comment = (ad.comment || ad.text || ad.note || "").toString().trim();
-
-  const lat = ad.lat ?? ad.latitude ?? null;
-  const lng = ad.lng ?? ad.longitude ?? null;
-
-  const created_at = ad.created_at || ad.createdAt || Date.now();
-
-  return {
-    role, name, phone, photo, carBrand, carNumber,
-    from, to, type, seats, price, comment,
-    lat, lng, created_at,
-    _raw: ad
-  };
+async function apiGetPoints(phone){
+  if(!phone) return 0;
+  const r = await fetch(API + "/api/points?phone=" + encodeURIComponent(phone));
+  const j = await r.json().catch(()=>({}));
+  return j.likes || 0;
 }
 
 // ====== BOOT ======
 document.addEventListener("DOMContentLoaded", async ()=>{
-  // Telegram init safe
   try{
     if(window.Telegram && Telegram.WebApp){
       Telegram.WebApp.ready();
@@ -382,13 +345,9 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     }
   }catch(e){}
 
-  // hide loading after 900ms
-  setTimeout(()=>{
-    document.getElementById("loading")?.classList.remove("active");
-  }, 900);
+  setTimeout(()=>{ document.getElementById("loading")?.classList.remove("active"); }, 900);
 
   applyI18n();
-  checkAdmin();
   initToggles();
 
   const lang = localStorage.getItem("lang");
@@ -414,8 +373,6 @@ document.addEventListener("DOMContentLoaded", async ()=>{
 window.setLang = (lang)=>{
   localStorage.setItem("lang", lang);
   applyI18n();
-
-  // ✅ убираем loading если висит
   document.getElementById("loading")?.classList.remove("active");
 
   const role = localStorage.getItem("role");
@@ -437,47 +394,58 @@ window.selectRole = (role)=>{
 function updateProfileUIRole(){
   const role = localStorage.getItem("role");
   const driverExtra = document.getElementById("driver-extra");
-  if(driverExtra){
-    driverExtra.style.display = role==="driver" ? "block" : "none";
-  }
+  if(driverExtra) driverExtra.style.display = role==="driver" ? "block" : "none";
 }
 
 window.goBackTo = (id)=> showScreen(id);
 
+// ====== PHOTO UPLOAD (base64) ======
+async function fileToBase64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 // ====== PROFILE SAVE ======
-window.saveProfile = ()=>{
+window.saveProfile = async ()=>{
   const role = localStorage.getItem("role");
   const name = (document.getElementById("p-name")?.value || "").trim();
   const phone = (document.getElementById("p-phone")?.value || "").trim();
   const carBrand = (document.getElementById("p-car-brand")?.value || "").trim();
   const carNumber = (document.getElementById("p-car-number")?.value || "").trim();
-  const photo = (document.getElementById("p-photo")?.value || "").trim();
+  const photoUrl = (document.getElementById("p-photo")?.value || "").trim();
   const bio = (document.getElementById("p-bio")?.value || "").trim();
 
   if(!name || !phone){
     toast(t("need_profile"), true);
     return;
   }
+  if(role==="driver" && (!carBrand || !carNumber)){
+    toast("❗ Mashina markasi va raqami shart!", true);
+    return;
+  }
 
-  if(role === "driver"){
-    if(!carBrand || !carNumber){
-      toast("❗ Mashina markasi va raqami shart!", true);
-      return;
-    }
+  // ✅ upload photo from device if exists
+  let photo = photoUrl || "";
+  const fileEl = document.getElementById("p-photo-file");
+  if(fileEl && fileEl.files && fileEl.files[0]){
+    photo = await fileToBase64(fileEl.files[0]);
   }
 
   const profile = {
     role,
     name,
     phone,
-    carBrand: role==="driver" ? (carBrand||"") : "",
-    carNumber: role==="driver" ? (carNumber||"") : "",
-    photo: photo || "",
-    bio: bio || "",
+    carBrand: role==="driver" ? carBrand : "",
+    carNumber: role==="driver" ? carNumber : "",
+    photo,
+    bio
   };
 
   setProfile(profile);
-  checkAdmin();
   showScreen("screen-home");
   nav("home");
   loadAds();
@@ -496,10 +464,6 @@ window.nav = (where)=>{
     showScreen("screen-profile-view");
     renderProfileView();
   }
-  if(where==="admin"){
-    showScreen("screen-admin");
-    adminRefresh();
-  }
 };
 
 // ====== FEED SWITCH ======
@@ -513,15 +477,11 @@ window.switchFeed = (mode)=>{
 // ====== SORT ======
 window.toggleSort = ()=>{
   const geoOn = document.getElementById("geoToggle")?.checked;
-
   if(!geoOn){
     SORT_MODE = "time";
-    updateSortLine();
-    loadAds();
-    return;
+  }else{
+    SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
   }
-
-  SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
   updateSortLine();
   loadAds();
 };
@@ -529,7 +489,6 @@ window.toggleSort = ()=>{
 function updateSortLine(){
   const el = document.getElementById("sortLine");
   if(!el) return;
-
   if(SORT_MODE==="distance"){
     el.innerHTML = `↕️ <span>${localStorage.getItem("lang")==="ru" ? "Сортировка: дистанция" : "Saralash: masofa"}</span>`;
   }else{
@@ -554,36 +513,30 @@ async function loadAds(){
 
     let list = Array.isArray(data) ? data : [];
 
-    // ✅ фильтруем по времени (60 минут)
-    list = list.filter(a => (Date.now() - (Number(a.created_at || a.createdAt || 0))) < AUTO_DELETE_MS);
+    // ✅ show only last 60 min
+    list = list.filter(a => (Date.now() - (a.created_at||0)) < AUTO_DELETE_MS);
 
-    // feed role filter
+    // ✅ role feed filter
     list = list.filter(a => {
-      if(FEED_MODE==="drivers") return (a.role === "driver" || a.userRole === "driver");
-      return (a.role === "client" || a.userRole === "client");
+      if(FEED_MODE==="drivers") return a.role === "driver";
+      return a.role === "client";
     });
 
-    // ✅ скрываем объявления без маршрута (идеальный вид)
-    list = list.filter(a => {
-      const from = String(a.from ?? a.pointA ?? a.a ?? "").trim();
-      const to   = String(a.to ?? a.pointB ?? a.b ?? "").trim();
-      return from.length > 1 && to.length > 1;
-    });
+    // ✅ hide without route
+    list = list.filter(a => String(a.from||"").trim() && String(a.to||"").trim());
 
-    // geo enabled?
+    // sorting
     const geo = getGeo();
     const geoEnabled = !!geo && (document.getElementById("geoToggle")?.checked);
 
     if(SORT_MODE==="distance" && geoEnabled){
       list.sort((a,b)=>{
-        const A = normalizeAd(a);
-        const B = normalizeAd(b);
-        const da = (A.lat && A.lng) ? distanceKm(geo.lat, geo.lng, A.lat, A.lng) : 99999;
-        const db = (B.lat && B.lng) ? distanceKm(geo.lat, geo.lng, B.lat, B.lng) : 99999;
+        const da = (a.lat && a.lng) ? distanceKm(geo.lat, geo.lng, a.lat, a.lng) : 99999;
+        const db = (b.lat && b.lng) ? distanceKm(geo.lat, geo.lng, b.lat, b.lng) : 99999;
         return da - db;
       });
     }else{
-      list.sort((a,b)=>(Number(b.created_at||b.createdAt||0))-(Number(a.created_at||a.createdAt||0)));
+      list.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
     }
 
     if(list.length===0){
@@ -594,108 +547,110 @@ async function loadAds(){
     cards.innerHTML = "";
     list.forEach(ad => cards.appendChild(renderCard(ad, geoEnabled ? geo : null)));
   }catch(e){
-    console.log("loadAds error:", e);
+    console.log(e);
     cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ ${t("publish_error")}</div></div>`;
   }
 }
 
-// ====== RENDER CARD ======
+// ====== CARD + DETAIL ======
 function renderCard(ad, geo){
-  const A = normalizeAd(ad);
-  const profileLikes = pointsForPhone(A.phone);
-
   const card = document.createElement("div");
   card.className = "glass card";
 
-  const carLine = `${A.carBrand} ${A.carNumber}`.trim();
+  const avatarStyle = ad.photo ? `style="background-image:url('${escapeHtml(ad.photo)}')"` : "";
+  const carLine = `${ad.carBrand||""} ${ad.carNumber||""}`.trim();
 
-  const avatarHtml = A.photo
-    ? `<div class="card-avatar" style="background-image:url('${escapeHtml(A.photo)}')"></div>`
-    : `<div class="card-avatar" style="display:grid;place-items:center;font-size:18px;">👤</div>`;
-
-  const fromText = A.from || "—";
-  const toText = A.to || "—";
+  let dist = "";
+  if(geo && ad.lat && ad.lng){
+    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
+    dist = `📍 ${d.toFixed(1)} km`;
+  }
 
   const typeLabel = (()=>{
-    if(A.type==="now") return t("type_now");
-    if(A.type==="20") return t("type_20");
+    if(ad.type==="now") return t("type_now");
+    if(ad.type==="20") return t("type_20");
     return t("type_fill");
   })();
-
-  let distHtml = "";
-  if(geo && geo.lat && geo.lng && A.lat && A.lng){
-    const d = distanceKm(geo.lat, geo.lng, A.lat, A.lng);
-    if(Number.isFinite(d)) distHtml = `<div class="badge">📍 ${d.toFixed(1)} km</div>`;
-  }
-
-  // time
-  let timeHtml = "";
-  const created = Number(A.created_at || 0);
-  if(created){
-    const mins = Math.floor((Date.now() - created) / 60000);
-    if(mins < 1) timeHtml = `<div class="card-sub">🟢 now</div>`;
-    else if(mins < 60) timeHtml = `<div class="card-sub">⏱ ${mins} min</div>`;
-    else timeHtml = `<div class="card-sub">⏱ ${Math.floor(mins/60)} h</div>`;
-  }
 
   card.innerHTML = `
     <div class="card-head">
       <div class="card-left">
-        ${avatarHtml}
+        <div class="card-avatar" ${avatarStyle}></div>
         <div>
-          <div class="card-name">${escapeHtml(A.name)}</div>
-          ${carLine ? `<div class="card-sub">${escapeHtml(carLine)}</div>` : ""}
-          ${timeHtml}
+          <div class="card-name">${escapeHtml(ad.name || "—")}</div>
+          <div class="card-sub">${escapeHtml(carLine)}</div>
         </div>
       </div>
 
-      <button class="like-btn" title="Like" onclick="likeDriver('${escapeJs(A.phone)}')">💛</button>
+      <button class="like-btn" title="Like" onclick="likeDriver('${escapeJs(ad.phone)}'); event.stopPropagation();">💛</button>
     </div>
 
     <div class="card-body">
       <div class="route-line">
-        <span class="route-pill">${escapeHtml(fromText)}</span>
+        <span class="route-pill">${escapeHtml(ad.from || "")}</span>
         <span>→</span>
-        <span class="route-pill">${escapeHtml(toText)}</span>
+        <span class="route-pill">${escapeHtml(ad.to || "")}</span>
       </div>
 
       <div class="card-info">
         <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
-        <div class="badge">👥 ${escapeHtml(String(A.seats ?? "0"))}</div>
-        <div class="badge">💰 ${escapeHtml(String(A.price ?? ""))}</div>
-        ${distHtml}
-        <div class="badge">🏆 ${profileLikes}</div>
+        <div class="badge">👥 ${escapeHtml(String(ad.seats ?? ""))}</div>
+        <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
+        ${dist ? `<div class="badge">${dist}</div>` : ""}
       </div>
 
-      ${A.comment ? `<div class="badge">💬 ${escapeHtml(A.comment)}</div>` : ""}
+      ${ad.comment ? `<div class="badge">💬 ${escapeHtml(ad.comment)}</div>` : ""}
 
       <div class="card-actions">
-        <button class="action call" onclick="callPhone('${escapeJs(A.phone)}')">${t("call")}</button>
-        <button class="action msg" onclick="msgUser('${escapeJs(A.phone)}','${escapeJs(A.name)}')">${t("message")}</button>
+        <button class="action call" onclick="callPhone('${escapeJs(ad.phone)}'); event.stopPropagation();">${t("call")}</button>
+        <button class="action msg" onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(ad.name||"")}'); event.stopPropagation();">${t("message")}</button>
       </div>
     </div>
   `;
 
+  card.onclick = ()=> openDetail(ad, geo);
   return card;
 }
 
-// ====== LIKE ======
-window.likeDriver = (phone)=>{
+function openDetail(ad, geo){
+  const box = document.getElementById("detailBox");
+  if(!box) return;
+
+  const carLine = `${ad.carBrand||""} ${ad.carNumber||""}`.trim();
+
+  let dist = "";
+  if(geo && ad.lat && ad.lng){
+    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
+    dist = `${d.toFixed(1)} km`;
+  }
+
+  const photoHtml = ad.photo
+    ? `<div class="detail-photo" style="background-image:url('${escapeHtml(ad.photo)}')"></div>`
+    : "";
+
+  box.innerHTML = `
+    ${photoHtml}
+    <div class="detail-row"><b>${escapeHtml(ad.name||"—")}</b><span>🏆</span></div>
+    ${carLine ? `<div class="detail-row"><span>Mashina</span><b>${escapeHtml(carLine)}</b></div>` : ""}
+    <div class="detail-row"><span>Marshrut</span><b>${escapeHtml(ad.from||"")} → ${escapeHtml(ad.to||"")}</b></div>
+    <div class="detail-row"><span>Narx</span><b>${escapeHtml(String(ad.price||""))}</b></div>
+    <div class="detail-row"><span>Joy</span><b>${escapeHtml(String(ad.seats||""))}</b></div>
+    ${dist ? `<div class="detail-row"><span>Masofa</span><b>📍 ${dist}</b></div>` : ""}
+  `;
+
+  openSheet("detailSheet");
+}
+
+// ====== LIKE / POINTS ======
+window.likeDriver = async (phone)=>{
   if(!phone) return;
-
-  // anti spam 3 sec
-  const lastKey = "like_last_" + phone;
-  const last = parseInt(localStorage.getItem(lastKey) || "0", 10);
-  if(Date.now() - last < 3000) return;
-  localStorage.setItem(lastKey, String(Date.now()));
-
-  const likes = getLikes();
-  likes[phone] = (likes[phone] || 0) + 1;
-  setLikes(likes);
-
-  const onHome = document.getElementById("screen-home")?.classList.contains("active");
-  if(onHome) loadAds();
-  renderProfileView();
+  try{
+    await apiLike(phone);
+    loadAds();
+    renderProfileView();
+  }catch(e){
+    console.log(e);
+  }
 };
 
 // ====== CALL / MSG ======
@@ -733,11 +688,6 @@ window.publishAd = async ()=>{
   const seatsEl = document.getElementById("ad-seats");
   const commentEl = document.getElementById("ad-comment");
 
-  if(!fromEl || !toEl || !typeEl || !priceEl || !seatsEl){
-    toast("❌ HTML id xato!", true);
-    return;
-  }
-
   const from = (fromEl.value || "").trim();
   const to = (toEl.value || "").trim();
   const type = typeEl.value;
@@ -745,8 +695,7 @@ window.publishAd = async ()=>{
   const seats = (seatsEl.value || "").trim();
   const comment = (commentEl?.value || "").trim();
 
-  // ✅ маршрут обязателен
-  if(from.length < 2 || to.length < 2 || price.length < 1){
+  if(from.length < 2 || to.length < 2 || !price){
     toast(t("fill_required"), true);
     return;
   }
@@ -760,30 +709,19 @@ window.publishAd = async ()=>{
 
   const payload = {
     role: profile.role,
-    name: (profile.name || "").trim(),
-    phone: (profile.phone || "").trim(),
-    carBrand: (profile.carBrand || "").trim(),
-    carNumber: (profile.carNumber || "").trim(),
-    photo: (profile.photo || "").trim(),
-
+    name: profile.name,
+    phone: profile.phone,
+    carBrand: profile.carBrand || "",
+    carNumber: profile.carNumber || "",
+    photo: profile.photo || "",
     from,
     to,
     type,
     price,
     seats: seatsNum,
     comment,
-
     lat: geo?.lat || null,
     lng: geo?.lng || null,
-
-    // ✅ дубли
-    full_name: (profile.name || "").trim(),
-    car_brand: (profile.carBrand || "").trim(),
-    car_number: (profile.carNumber || "").trim(),
-    photo_url: (profile.photo || "").trim(),
-    pointA: from,
-    pointB: to,
-    createdAt: Date.now()
   };
 
   try{
@@ -793,16 +731,10 @@ window.publishAd = async ()=>{
       body: JSON.stringify(payload)
     });
 
-    const j = await r.json().catch(()=>({}));
-
-    if(!r.ok){
-      console.log("Publish error:", r.status, j);
-      throw new Error("Publish failed");
-    }
+    if(!r.ok) throw new Error("Publish failed");
 
     closeSheet("createAdSheet");
     toast(t("published_ok"));
-    clearAdForm();
     loadAds();
     renderMyAds();
   }catch(e){
@@ -811,35 +743,8 @@ window.publishAd = async ()=>{
   }
 };
 
-function clearAdForm(){
-  ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.value = "";
-  });
-}
-
-// ====== SETTINGS / DONATE ======
-window.donateNow = ()=>{
-  toast("💛 711 GROUP");
-};
-
-// ====== TOAST ======
-function toast(msg, danger=false){
-  try{
-    if(window.Telegram && Telegram.WebApp){
-      Telegram.WebApp.showPopup({
-        title: danger ? "❌" : "✅",
-        message: msg,
-        buttons:[{type:"ok"}]
-      });
-      return;
-    }
-  }catch(e){}
-  alert(msg);
-}
-
 // ====== PROFILE VIEW ======
-function renderProfileView(){
+async function renderProfileView(){
   const p = getProfile();
   if(!p) return;
 
@@ -860,29 +765,31 @@ function renderProfileView(){
   const carLine = (p.role==="driver")
     ? `${p.carBrand || ""} ${p.carNumber || ""}`.trim()
     : "";
-  document.getElementById("pv-car").innerText = carLine ? carLine : (p.role==="client" ? "👤 Client" : "");
+  document.getElementById("pv-car").innerText = carLine ? carLine : "";
 
-  const pts = pointsForPhone(p.phone || "");
+  // ✅ real points from backend
+  const pts = await apiGetPoints(p.phone || "");
   document.getElementById("pv-points").innerText = `${pts} 🏆`;
 
-  let rating = 4.0 + (pts / 50);
+  // ✅ stable rating
+  let rating = 4.0 + (pts / 100);
   if(rating > 5.0) rating = 5.0;
   document.getElementById("pv-rating").innerText = `${rating.toFixed(1)} ⭐`;
-
-  // fill edit inputs
-  document.getElementById("ep-name").value = p.name || "";
-  document.getElementById("ep-phone").value = p.phone || "";
-  document.getElementById("ep-car-brand").value = p.carBrand || "";
-  document.getElementById("ep-car-number").value = p.carNumber || "";
-  document.getElementById("ep-photo").value = p.photo || "";
 
   renderMyAds();
 }
 
 // ====== EDIT PROFILE SAVE ======
-window.saveProfileEdit = ()=>{
+window.saveProfileEdit = async ()=>{
   const p = getProfile();
   if(!p) return;
+
+  let photo = (document.getElementById("ep-photo")?.value || "").trim() || p.photo || "";
+
+  const fileEl = document.getElementById("ep-photo-file");
+  if(fileEl && fileEl.files && fileEl.files[0]){
+    photo = await fileToBase64(fileEl.files[0]);
+  }
 
   const np = {
     ...p,
@@ -890,13 +797,12 @@ window.saveProfileEdit = ()=>{
     phone: (document.getElementById("ep-phone")?.value || "").trim(),
     carBrand: (document.getElementById("ep-car-brand")?.value || "").trim(),
     carNumber: (document.getElementById("ep-car-number")?.value || "").trim(),
-    photo: (document.getElementById("ep-photo")?.value || "").trim(),
+    photo,
   };
 
   setProfile(np);
   closeSheet("editProfileSheet");
   toast("✅ Saved");
-  checkAdmin();
   renderProfileView();
   loadAds();
 };
@@ -912,7 +818,7 @@ async function renderMyAds(){
   try{
     const res = await fetch(API + "/api/ads");
     const data = await res.json();
-    const mine = (Array.isArray(data)?data:[]).filter(a => String(a.phone||"") === String(p.phone||""));
+    const mine = (Array.isArray(data)?data:[]).filter(a => a.phone === p.phone);
 
     if(mine.length===0){
       listEl.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
@@ -920,34 +826,31 @@ async function renderMyAds(){
     }
 
     listEl.innerHTML = "";
-    mine.sort((a,b)=>(Number(b.created_at||b.createdAt||0))-(Number(a.created_at||a.createdAt||0)));
-
+    mine.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
     mine.forEach(ad=>{
-      const A = normalizeAd(ad);
       const div = document.createElement("div");
       div.className = "glass card";
       div.innerHTML = `
         <div class="card-body">
           <div class="route-line">
-            <span class="route-pill">${escapeHtml(A.from||"")}</span>
+            <span class="route-pill">${escapeHtml(ad.from||"")}</span>
             <span>→</span>
-            <span class="route-pill">${escapeHtml(A.to||"")}</span>
+            <span class="route-pill">${escapeHtml(ad.to||"")}</span>
           </div>
           <div class="card-info">
-            <div class="badge">💰 ${escapeHtml(String(A.price||""))}</div>
-            <div class="badge">👥 ${escapeHtml(String(A.seats||""))}</div>
+            <div class="badge">💰 ${escapeHtml(String(ad.price||""))}</div>
+            <div class="badge">👥 ${escapeHtml(String(ad.seats||""))}</div>
           </div>
         </div>
       `;
       listEl.appendChild(div);
     });
   }catch(e){
-    console.log(e);
     listEl.innerHTML = `<div class="glass card"><div class="muted">⚠️</div></div>`;
   }
 }
 
-// ====== GEO TOGGLE ======
+// ====== GEO ======
 function initToggles(){
   const geoToggle = document.getElementById("geoToggle");
   const notifyToggle = document.getElementById("notifyToggle");
@@ -960,23 +863,17 @@ function initToggles(){
     };
   }
 
-  const geoSaved = !!getGeo();
   if(geoToggle){
-    geoToggle.checked = geoSaved;
     geoToggle.onchange = async ()=>{
       if(geoToggle.checked){
         await updateLocationNow();
       }else{
         localStorage.removeItem("geo");
-        updateGeoLine();
-        SORT_MODE = "time";
-        updateSortLine();
         loadAds();
       }
     };
   }
 
-  updateGeoLine();
   updateSortLine();
 }
 
@@ -992,56 +889,15 @@ window.updateLocationNow = async ()=>{
   navigator.geolocation.getCurrentPosition(
     (pos)=>{
       saveGeo(pos.coords.latitude, pos.coords.longitude);
-      updateGeoLine();
       loadAds();
       if(geoStatus){
         geoStatus.innerText = `✅ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
       }
     },
-    (err)=>{
+    ()=>{
       if(geoStatus) geoStatus.innerText = "❌ Geo error";
-      console.log(err);
     },
     { enableHighAccuracy:true, timeout:10000 }
   );
 };
 
-function updateGeoLine(){
-  const geoLine = document.getElementById("geoLine");
-  if(!geoLine) return;
-
-  const toggle = document.getElementById("geoToggle");
-  const enabled = !!toggle?.checked;
-
-  if(enabled){
-    geoLine.innerHTML = `📍 <span>${localStorage.getItem("lang")==="ru" ? "Геолокация: ON" : "Geolokatsiya: ON"}</span>`;
-  }else{
-    geoLine.innerHTML = `📍 <span data-i18n="geo_off">${t("geo_off")}</span>`;
-  }
-}
-
-// ====== ADMIN ======
-window.adminRefresh = async ()=>{
-  try{
-    const res = await fetch(API + "/api/ads");
-    const data = await res.json();
-    const count = Array.isArray(data)?data.length:0;
-    document.getElementById("adminStats").innerText = `Ads: ${count}`;
-  }catch(e){
-    document.getElementById("adminStats").innerText = "Error";
-  }
-};
-
-window.adminClearAll = async ()=>{
-  toast("Admin clear: backend kerak (keyin qo‘shamiz)");
-};
-
-// ====== ESCAPE HELPERS ======
-function escapeHtml(str){
-  return String(str || "").replace(/[&<>"']/g, s=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[s]));
-}
-function escapeJs(str){
-  return String(str||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-}
