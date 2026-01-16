@@ -505,8 +505,6 @@ async function loadAds(){
 
     let list = Array.isArray(data) ? data : [];
 
-    // ✅ only last 60 min
-    list = list.filter(a => (Date.now() - (a.created_at||0)) < AUTO_DELETE_MS);
 
     // ✅ feed by role
     list = list.filter(a => {
@@ -514,8 +512,12 @@ async function loadAds(){
       return a.role === "client";
     });
 
-    // ✅ hide ads without route (ideal look)
-    list = list.filter(a => String(a.from||"").trim() && String(a.to||"").trim());
+    /list = list.filter(a => {
+  const from = String(a.from ?? a.pointA ?? "").trim();
+  const to = String(a.to ?? a.pointB ?? "").trim();
+  return from.length > 0 && to.length > 0;
+});
+
 
     const geo = getGeo();
     const geoEnabled = !!geo && (document.getElementById("geoToggle")?.checked);
@@ -581,9 +583,9 @@ function renderCard(ad, geo){
 
     <div class="card-body">
       <div class="route-line">
-        <span class="route-pill">${escapeHtml(ad.from || "")}</span>
+        <span class="route-pill">${escapeHtml(ad.from || ad.pointA || "")}</span>
         <span>→</span>
-        <span class="route-pill">${escapeHtml(ad.to || "")}</span>
+        <span class="route-pill">${escapeHtml(ad.to || ad.pointB || "")}</span>
       </div>
 
       <div class="card-info">
