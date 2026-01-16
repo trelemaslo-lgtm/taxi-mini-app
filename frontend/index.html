@@ -286,6 +286,22 @@
       </div>
     </div>
   </div>
+<!-- AD DETAIL SHEET -->
+<div id="adDetailSheet" class="sheet-wrap" onclick="sheetOutside(event,'adDetailSheet')">
+  <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+    <div class="sheet-head">
+      <div class="sheet-head-title">🚕 E’lon</div>
+      <button class="icon-btn" onclick="closeSheet('adDetailSheet')">✕</button>
+    </div>
+
+    <div id="adDetailContent" class="detail-box"></div>
+
+    <div class="row2" style="margin-top:12px;">
+      <button class="btn primary" id="detailCallBtn">Qo‘ng‘iroq</button>
+      <button class="btn" id="detailMsgBtn">Yozish</button>
+    </div>
+  </div>
+</div>
 
   <!-- SETTINGS SHEET -->
   <div id="settingsSheet" class="sheet-wrap" onclick="sheetOutside(event,'settingsSheet')">
