@@ -710,6 +710,11 @@ window.publishAd = async ()=>{
 
   const geoEnabled = document.getElementById("geoToggle")?.checked;
   const geo = geoEnabled ? getGeo() : null;
+if(!profile.phone || String(profile.phone).trim().length < 5){
+  toast("❗Telefon raqam profilga kiritilmagan!", true);
+  nav("profile");
+  return;
+}
 
   const payload = {
     role: profile.role,
