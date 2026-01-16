@@ -1,33 +1,121 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float
-from sqlalchemy.orm import declarative_base, sessionmaker
+import sqlite3
+from pathlib import Path
 
-engine = create_engine("sqlite:///taxi.db", echo=False)
-Session = sessionmaker(bind=engine)
-Base = declarative_base()
+DB_PATH = Path("data.sqlite")
 
-class Ad(Base):
-    __tablename__ = "ads"
 
-    id = Column(Integer, primary_key=True)
-    role = Column(String)      # driver / client
-    name = Column(String)
-    phone = Column(String)
-    route = Column(String)
-    mode = Column(String)      # now / wait / later
-    price = Column(String)
-    seats = Column(Integer)
-    comment = Column(String)
-    created_at = Column(Float)
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-    points = Column(Integer, default=0)
-    lat = Column(Float)
-    lon = Column(Float)
-
-class Like(Base):
-    __tablename__ = "likes"
-    id = Column(Integer, primary_key=True)
-    ad_id = Column(Integer)
-    user_id = Column(String)
 
 def init_db():
-    Base.metadata.create_all(engine)
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # ADS
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS ads (
+      id TEXT PRIMARY KEY,
+      role TEXT,
+      name TEXT,
+      phone TEXT,
+      carBrand TEXT,
+      carNumber TEXT,
+      photo TEXT,
+      "from" TEXT,
+      "to" TEXT,
+      type TEXT,
+      price TEXT,
+      seats INTEGER,
+      comment TEXT,
+      lat REAL,
+      lng REAL,
+      created_at INTEGER
+    )
+    """)
+
+    # LIKES
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS likes (
+      phone TEXT PRIMARY KEY,
+      likes INTEGER DEFAULT 0
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def add_ad(ad: dict):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+    INSERT INTO ads (
+      id, role, name, phone, carBrand, carNumber, photo,
+      "from", "to", type, price, seats, comment, lat, lng, created_at
+    )
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (
+        ad["id"], ad["role"], ad["name"], ad["phone"],
+        ad.get("carBrand",""), ad.get("carNumber",""), ad.get("photo",""),
+        ad.get("from",""), ad.get("to",""), ad.get("type","now"),
+        ad.get("price",""), int(ad.get("seats",0)),
+        ad.get("comment",""), ad.get("lat"), ad.get("lng"),
+        int(ad["created_at"])
+    ))
+
+    conn.commit()
+    conn.close()
+
+
+def get_ads():
+    conn = get_conn()
+    cur = conn.cursor()
+    rows = cur.execute("""SELECT * FROM ads ORDER BY created_at DESC""").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_old_ads(cutoff_ts: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""DELETE FROM ads WHERE created_at < ?""", (cutoff_ts,))
+    conn.commit()
+    conn.close()
+
+
+def like_phone(phone: str) -> int:
+    conn = get_conn()
+    cur = conn.cursor()
+
+    row = cur.execute("SELECT likes FROM likes WHERE phone=?", (phone,)).fetchone()
+    if row is None:
+        cur.execute("INSERT INTO likes(phone, likes) VALUES(?, ?)", (phone, 1))
+        likes = 1
+    else:
+        likes = int(row["likes"]) + 1
+        cur.execute("UPDATE likes SET likes=? WHERE phone=?", (likes, phone))
+
+    conn.commit()
+    conn.close()
+    return likes
+
+
+def get_points(phone: str) -> int:
+    conn = get_conn()
+    cur = conn.cursor()
+    row = cur.execute("SELECT likes FROM likes WHERE phone=?", (phone,)).fetchone()
+    conn.close()
+    return int(row["likes"]) if row else 0
+
+
+def top_list(limit: int = 20):
+    conn = get_conn()
+    cur = conn.cursor()
+    rows = cur.execute("""
+      SELECT phone, likes FROM likes ORDER BY likes DESC LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
