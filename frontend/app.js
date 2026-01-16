@@ -517,17 +517,18 @@ async function loadAds(){
 // ====== RENDER CARD ======
 function renderCard(ad, geo){
   const profileLikes = pointsForPhone(ad.phone);
-
   const card = document.createElement("div");
   card.className = "glass card";
 
-  const avatarStyle = ad.photo ? `style="background-image:url('${escapeHtml(ad.photo)}')"` : "";
+  // ✅ Вытаскиваем данные безопасно
+  const role = ad.role || "";
+  const name = (ad.name && ad.name.trim()) ? ad.name.trim() : (role==="driver" ? "🚘 Haydovchi" : "👤 Mijoz");
+  const carBrand = (ad.carBrand || "").trim();
+  const carNumber = (ad.carNumber || "").trim();
+  const carLine = (carBrand || carNumber) ? `${carBrand} ${carNumber}`.trim() : "";
 
-  let dist = "";
-  if(geo && ad.lat && ad.lng){
-    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
-    dist = `📍 ${d.toFixed(1)} km`;
-  }
+  const from = (ad.from && ad.from.trim()) ? ad.from.trim() : "—";
+  const to = (ad.to && ad.to.trim()) ? ad.to.trim() : "—";
 
   const typeLabel = (()=>{
     if(ad.type==="now") return t("type_now");
@@ -535,13 +536,39 @@ function renderCard(ad, geo){
     return t("type_fill");
   })();
 
+  const seats = (ad.seats === 0 || ad.seats) ? String(ad.seats) : "—";
+  const price = (ad.price === 0 || ad.price) ? String(ad.price) : "—";
+
+  // ✅ Фото или иконка
+  const avatarHtml = ad.photo
+    ? `<div class="card-avatar" style="background-image:url('${escapeHtml(ad.photo)}')"></div>`
+    : `<div class="card-avatar" style="display:grid;place-items:center;">👤</div>`;
+
+  // ✅ Дистанция
+  let distHtml = "";
+  if(geo && geo.lat && geo.lng && ad.lat && ad.lng){
+    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
+    if(Number.isFinite(d)) distHtml = `<div class="badge">📍 ${d.toFixed(1)} km</div>`;
+  }
+
+  // ✅ Время
+  const created = Number(ad.created_at || 0);
+  let timeText = "";
+  if(created){
+    const mins = Math.floor((Date.now() - created) / 60000);
+    if(mins < 1) timeText = "🟢 now";
+    else if(mins < 60) timeText = `⏱ ${mins} min ago`;
+    else timeText = `⏱ ${Math.floor(mins/60)} h ago`;
+  }
+
   card.innerHTML = `
     <div class="card-head">
       <div class="card-left">
-        <div class="card-avatar" ${avatarStyle}></div>
+        ${avatarHtml}
         <div>
-          <div class="card-name">${escapeHtml(ad.name || "—")}</div>
-          <div class="card-sub">${escapeHtml(ad.carBrand || "")} ${escapeHtml(ad.carNumber || "")}</div>
+          <div class="card-name">${escapeHtml(name)}</div>
+          ${carLine ? `<div class="card-sub">${escapeHtml(carLine)}</div>` : ""}
+          ${timeText ? `<div class="card-sub">${escapeHtml(timeText)}</div>` : ""}
         </div>
       </div>
 
@@ -550,30 +577,30 @@ function renderCard(ad, geo){
 
     <div class="card-body">
       <div class="route-line">
-        <span class="route-pill">${escapeHtml(ad.from || "")}</span>
+        <span class="route-pill">${escapeHtml(from)}</span>
         <span>→</span>
-        <span class="route-pill">${escapeHtml(ad.to || "")}</span>
+        <span class="route-pill">${escapeHtml(to)}</span>
       </div>
 
       <div class="card-info">
         <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
-        <div class="badge">👥 ${escapeHtml(String(ad.seats ?? ""))}</div>
-        <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
-        ${dist ? `<div class="badge">${dist}</div>` : ""}
+        <div class="badge">👥 ${escapeHtml(seats)}</div>
+        <div class="badge">💰 ${escapeHtml(price)}</div>
+        ${distHtml}
         <div class="badge">🏆 ${profileLikes}</div>
       </div>
 
-      <div class="badge">${escapeHtml(ad.comment || "")}</div>
+      ${ad.comment ? `<div class="badge">💬 ${escapeHtml(ad.comment)}</div>` : ""}
 
       <div class="card-actions">
         <button class="action call" onclick="callPhone('${escapeJs(ad.phone)}')">${t("call")}</button>
-        <button class="action msg" onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(ad.name||"")}')">${t("message")}</button>
+        <button class="action msg" onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(name)}')">${t("message")}</button>
       </div>
     </div>
   `;
-
   return card;
 }
+
 
 // ====== LIKE ======
 window.likeDriver = (phone)=>{
