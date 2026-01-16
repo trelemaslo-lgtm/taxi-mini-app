@@ -527,8 +527,10 @@ function renderCard(ad, geo){
   const carNumber = (ad.carNumber || "").trim();
   const carLine = (carBrand || carNumber) ? `${carBrand} ${carNumber}`.trim() : "";
 
-  const from = (ad.from && ad.from.trim()) ? ad.from.trim() : "—";
-  const to = (ad.to && ad.to.trim()) ? ad.to.trim() : "—";
+ const fromRaw = ad.from ?? ad.pointA ?? ad.a ?? "";
+const toRaw = ad.to ?? ad.pointB ?? ad.b ?? "";
+const from = String(fromRaw || "").trim() || "—";
+const to = String(toRaw || "").trim() || "—";
 
   const typeLabel = (()=>{
     if(ad.type==="now") return t("type_now");
@@ -540,9 +542,11 @@ function renderCard(ad, geo){
   const price = (ad.price === 0 || ad.price) ? String(ad.price) : "—";
 
   // ✅ Фото или иконка
-  const avatarHtml = ad.photo
-    ? `<div class="card-avatar" style="background-image:url('${escapeHtml(ad.photo)}')"></div>`
-    : `<div class="card-avatar" style="display:grid;place-items:center;">👤</div>`;
+const photoRaw = ad.photo ?? ad.avatar ?? ad.image ?? "";
+const avatarHtml = photoRaw
+  ? `<div class="card-avatar" style="background-image:url('${escapeHtml(photoRaw)}')"></div>`
+  : `<div class="card-avatar" style="display:grid;place-items:center;">👤</div>`;
+
 
   // ✅ Дистанция
   let distHtml = "";
