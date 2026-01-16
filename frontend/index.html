@@ -51,7 +51,7 @@
           <div class="stack">
             <button class="btn primary" onclick="setLang('uz')">O‘zbek</button>
             <button class="btn" onclick="setLang('ru')">Русский</button>
-            <button class="btn" onclick="setLang('uzk')">Ўзбекча</button>
+            <button class="btn" onclick="setLang('uzk')">Ўzbekcha</button>
           </div>
 
           <p class="muted" data-i18n="lang_hint">
@@ -66,11 +66,18 @@
           <h1 class="title" data-i18n="choose_role">Rolin tanlang</h1>
 
           <div class="stack">
-            <button class="btn primary" onclick="selectRole('driver')">🚘 <span data-i18n="role_driver">Haydovchi</span></button>
-            <button class="btn" onclick="selectRole('client')">👤 <span data-i18n="role_client">Mijoz</span></button>
+            <button class="btn primary" onclick="selectRole('driver')">
+              🚘 <span data-i18n="role_driver">Haydovchi</span>
+            </button>
+
+            <button class="btn" onclick="selectRole('client')">
+              👤 <span data-i18n="role_client">Mijoz</span>
+            </button>
           </div>
 
-          <button class="link" onclick="goBackTo('screen-language')">← <span data-i18n="back">Orqaga</span></button>
+          <button class="link" onclick="goBackTo('screen-language')">
+            ← <span data-i18n="back">Orqaga</span>
+          </button>
         </div>
       </section>
 
@@ -80,6 +87,7 @@
           <h2 class="sheet-title" data-i18n="profile_setup">Profilni to‘ldirish</h2>
 
           <div class="form-grid">
+
             <label class="field">
               <span data-i18n="full_name">Ism familiya</span>
               <input id="p-name" placeholder="Temur Qodirov" />
@@ -102,9 +110,16 @@
               </label>
             </div>
 
+            <!-- ✅ URL PHOTO (old) -->
             <label class="field">
               <span data-i18n="photo_url">Foto (URL)</span>
               <input id="p-photo" placeholder="https://..." />
+            </label>
+
+            <!-- ✅ DEVICE UPLOAD -->
+            <label class="field">
+              <span>Foto (Upload)</span>
+              <input id="p-photo-file" type="file" accept="image/*" />
             </label>
 
             <label class="field">
@@ -114,11 +129,15 @@
           </div>
 
           <div class="row">
-            <button class="btn primary full" onclick="saveProfile()" data-i18n="continue">Davom etish</button>
+            <button class="btn primary full" onclick="saveProfile()" data-i18n="continue">
+              Davom etish
+            </button>
           </div>
 
           <div class="row">
-            <button class="link" onclick="goBackTo('screen-role')">← <span data-i18n="back">Orqaga</span></button>
+            <button class="link" onclick="goBackTo('screen-role')">
+              ← <span data-i18n="back">Orqaga</span>
+            </button>
           </div>
         </div>
       </section>
@@ -146,7 +165,6 @@
         </div>
 
         <div id="cards" class="cards">
-          <!-- skeleton -->
           <div class="skeleton glass"></div>
           <div class="skeleton glass"></div>
           <div class="skeleton glass"></div>
@@ -180,21 +198,6 @@
             <button class="btn" onclick="openSheet('editProfileSheet')" data-i18n="edit_profile">Profilni tahrirlash</button>
             <button class="btn" onclick="openSheet('myAdsSheet')" data-i18n="my_ads">Mening e’lonlarim</button>
           </div>
-        </div>
-      </section>
-
-      <!-- SCREEN: ADMIN -->
-      <section id="screen-admin" class="screen">
-        <div class="sheet glass">
-          <h2 class="sheet-title">🛡 Admin</h2>
-          <p class="muted">Faqat siz uchun: e’lonlar nazorati / statistika.</p>
-
-          <div class="admin-grid">
-            <button class="btn" onclick="adminRefresh()">🔄 Refresh</button>
-            <button class="btn danger" onclick="adminClearAll()">🗑 Clear ALL</button>
-          </div>
-
-          <div class="mini muted" id="adminStats">—</div>
         </div>
       </section>
 
@@ -315,11 +318,6 @@
           ✨ <span data-i18n="about">Biz haqimizda</span>
           <span class="right">i</span>
         </button>
-
-        <button class="setting-item admin-only" onclick="nav('admin')">
-          🛡 Admin Panel
-          <span class="right">→</span>
-        </button>
       </div>
 
       <div class="sheet-foot muted small">
@@ -338,7 +336,7 @@
       <div class="stack">
         <button class="btn" onclick="setLang('uz'); closeSheet('langSheet')">O‘zbek</button>
         <button class="btn" onclick="setLang('ru'); closeSheet('langSheet')">Русский</button>
-        <button class="btn" onclick="setLang('uzk'); closeSheet('langSheet')">Ўзбекча</button>
+        <button class="btn" onclick="setLang('uzk'); closeSheet('langSheet')">Ўzbekcha</button>
       </div>
     </div>
   </div>
@@ -443,9 +441,16 @@
           <input id="ep-car-number" />
         </label>
 
+        <!-- URL PHOTO -->
         <label class="field">
           <span data-i18n="photo_url">Foto (URL)</span>
           <input id="ep-photo" />
+        </label>
+
+        <!-- ✅ DEVICE UPLOAD -->
+        <label class="field">
+          <span>Foto (Upload)</span>
+          <input id="ep-photo-file" type="file" accept="image/*" />
         </label>
 
         <div class="row2">
@@ -465,6 +470,18 @@
       </div>
 
       <div id="myAdsList" class="cards small-cards"></div>
+    </div>
+  </div>
+
+  <!-- ✅ DETAIL SHEET (NEW) -->
+  <div id="detailSheet" class="sheet-wrap" onclick="sheetOutside(event,'detailSheet')">
+    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+      <div class="sheet-head">
+        <div class="sheet-head-title">🚕 To‘liq ma’lumot</div>
+        <button class="icon-btn" onclick="closeSheet('detailSheet')">✕</button>
+      </div>
+
+      <div id="detailBox" class="glass-soft" style="padding:12px;border-radius:22px;"></div>
     </div>
   </div>
 
