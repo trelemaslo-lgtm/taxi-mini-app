@@ -513,56 +513,87 @@ async function loadAds(){
     cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ ${t("publish_error")}</div></div>`;
   }
 }
+function normalizeAd(ad){
+  const role = ad.role || ad.userRole || "";
+
+  const name =
+    (ad.name || ad.full_name || ad.fullName || ad.username || "").toString().trim() ||
+    (role === "driver" ? "🚘 Haydovchi" : "👤 Mijoz");
+
+  const phone = (ad.phone || ad.tel || ad.contact || "").toString().trim();
+
+  const photo =
+    (ad.photo || ad.avatar || ad.image || ad.photo_url || ad.photoUrl || "").toString().trim();
+
+  const carBrand = (ad.carBrand || ad.car_brand || ad.brand || "").toString().trim();
+  const carNumber = (ad.carNumber || ad.car_number || ad.number || "").toString().trim();
+
+  // маршрут (берём из разных вариантов)
+  const from =
+    (ad.from ?? ad.pointA ?? ad.a ?? ad.origin ?? ad.start ?? "").toString().trim();
+  const to =
+    (ad.to ?? ad.pointB ?? ad.b ?? ad.destination ?? ad.end ?? "").toString().trim();
+
+  const type = (ad.type || ad.tripType || "fill").toString();
+  const seats = ad.seats ?? ad.freeSeats ?? ad.places ?? 0;
+  const price = ad.price ?? ad.cost ?? ad.sum ?? "";
+
+  const comment = (ad.comment || ad.text || ad.note || "").toString().trim();
+
+  const lat = ad.lat ?? ad.latitude ?? null;
+  const lng = ad.lng ?? ad.longitude ?? null;
+
+  const created_at = ad.created_at || ad.createdAt || Date.now();
+
+  return {
+    role, name, phone, photo, carBrand, carNumber,
+    from, to, type, seats, price, comment,
+    lat, lng, created_at,
+    _raw: ad
+  };
+}
+
 
 // ====== RENDER CARD ======
 function renderCard(ad, geo){
-  const profileLikes = pointsForPhone(ad.phone);
+  const A = normalizeAd(ad);
+  const profileLikes = pointsForPhone(A.phone);
+
   const card = document.createElement("div");
   card.className = "glass card";
 
-  // ✅ Вытаскиваем данные безопасно
-  const role = ad.role || "";
-  const name = (ad.name && ad.name.trim()) ? ad.name.trim() : (role==="driver" ? "🚘 Haydovchi" : "👤 Mijoz");
-  const carBrand = (ad.carBrand || "").trim();
-  const carNumber = (ad.carNumber || "").trim();
-  const carLine = (carBrand || carNumber) ? `${carBrand} ${carNumber}`.trim() : "";
+  const carLine = `${A.carBrand} ${A.carNumber}`.trim();
 
- const fromRaw = ad.from ?? ad.pointA ?? ad.a ?? "";
-const toRaw = ad.to ?? ad.pointB ?? ad.b ?? "";
-const from = String(fromRaw || "").trim() || "—";
-const to = String(toRaw || "").trim() || "—";
+  // ✅ фото (если нет — красивый аватар)
+  const avatarHtml = A.photo
+    ? `<div class="card-avatar" style="background-image:url('${escapeHtml(A.photo)}')"></div>`
+    : `<div class="card-avatar" style="display:grid;place-items:center;font-size:18px;">👤</div>`;
 
+  // ✅ маршрут: если пусто — показываем “Не указано”
+  const fromText = A.from ? A.from : "📍 A: yozilmagan";
+  const toText = A.to ? A.to : "📍 B: yozilmagan";
+
+  // ✅ тип
   const typeLabel = (()=>{
-    if(ad.type==="now") return t("type_now");
-    if(ad.type==="20") return t("type_20");
+    if(A.type==="now") return t("type_now");
+    if(A.type==="20") return t("type_20");
     return t("type_fill");
   })();
 
-  const seats = (ad.seats === 0 || ad.seats) ? String(ad.seats) : "—";
-  const price = (ad.price === 0 || ad.price) ? String(ad.price) : "—";
-
-  // ✅ Фото или иконка
-const photoRaw = ad.photo ?? ad.avatar ?? ad.image ?? "";
-const avatarHtml = photoRaw
-  ? `<div class="card-avatar" style="background-image:url('${escapeHtml(photoRaw)}')"></div>`
-  : `<div class="card-avatar" style="display:grid;place-items:center;">👤</div>`;
-
-
-  // ✅ Дистанция
+  // ✅ дистанция
   let distHtml = "";
-  if(geo && geo.lat && geo.lng && ad.lat && ad.lng){
-    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
+  if(geo && geo.lat && geo.lng && A.lat && A.lng){
+    const d = distanceKm(geo.lat, geo.lng, A.lat, A.lng);
     if(Number.isFinite(d)) distHtml = `<div class="badge">📍 ${d.toFixed(1)} km</div>`;
   }
 
-  // ✅ Время
-  const created = Number(ad.created_at || 0);
-  let timeText = "";
-  if(created){
-    const mins = Math.floor((Date.now() - created) / 60000);
-    if(mins < 1) timeText = "🟢 now";
-    else if(mins < 60) timeText = `⏱ ${mins} min ago`;
-    else timeText = `⏱ ${Math.floor(mins/60)} h ago`;
+  // ✅ время
+  let timeHtml = "";
+  if(A.created_at){
+    const mins = Math.floor((Date.now() - Number(A.created_at)) / 60000);
+    if(mins < 1) timeHtml = `<div class="card-sub">🟢 now</div>`;
+    else if(mins < 60) timeHtml = `<div class="card-sub">⏱ ${mins} min ago</div>`;
+    else timeHtml = `<div class="card-sub">⏱ ${Math.floor(mins/60)} h ago</div>`;
   }
 
   card.innerHTML = `
@@ -570,40 +601,42 @@ const avatarHtml = photoRaw
       <div class="card-left">
         ${avatarHtml}
         <div>
-          <div class="card-name">${escapeHtml(name)}</div>
+          <div class="card-name">${escapeHtml(A.name)}</div>
           ${carLine ? `<div class="card-sub">${escapeHtml(carLine)}</div>` : ""}
-          ${timeText ? `<div class="card-sub">${escapeHtml(timeText)}</div>` : ""}
+          ${timeHtml}
         </div>
       </div>
 
-      <button class="like-btn" title="Like" onclick="likeDriver('${escapeJs(ad.phone)}')">💛</button>
+      <button class="like-btn" title="Like" onclick="likeDriver('${escapeJs(A.phone)}')">💛</button>
     </div>
 
     <div class="card-body">
       <div class="route-line">
-        <span class="route-pill">${escapeHtml(from)}</span>
+        <span class="route-pill">${escapeHtml(fromText)}</span>
         <span>→</span>
-        <span class="route-pill">${escapeHtml(to)}</span>
+        <span class="route-pill">${escapeHtml(toText)}</span>
       </div>
 
       <div class="card-info">
         <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
-        <div class="badge">👥 ${escapeHtml(seats)}</div>
-        <div class="badge">💰 ${escapeHtml(price)}</div>
+        <div class="badge">👥 ${escapeHtml(String(A.seats ?? "0"))}</div>
+        <div class="badge">💰 ${escapeHtml(String(A.price ?? ""))}</div>
         ${distHtml}
         <div class="badge">🏆 ${profileLikes}</div>
       </div>
 
-      ${ad.comment ? `<div class="badge">💬 ${escapeHtml(ad.comment)}</div>` : ""}
+      ${A.comment ? `<div class="badge">💬 ${escapeHtml(A.comment)}</div>` : ""}
 
       <div class="card-actions">
-        <button class="action call" onclick="callPhone('${escapeJs(ad.phone)}')">${t("call")}</button>
-        <button class="action msg" onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(name)}')">${t("message")}</button>
+        <button class="action call" onclick="callPhone('${escapeJs(A.phone)}')">${t("call")}</button>
+        <button class="action msg" onclick="msgUser('${escapeJs(A.phone)}','${escapeJs(A.name)}')">${t("message")}</button>
       </div>
     </div>
   `;
+
   return card;
 }
+
 
 
 // ====== LIKE ======
@@ -678,24 +711,35 @@ window.publishAd = async ()=>{
   const geoEnabled = document.getElementById("geoToggle")?.checked;
   const geo = geoEnabled ? getGeo() : null;
 
-  const payload = {
-    role: profile.role,
-    name: profile.name,
-    phone: profile.phone,
-    carBrand: profile.carBrand || "",
-    carNumber: profile.carNumber || "",
-    photo: (profile.photo && profile.photo.trim()) ? profile.photo.trim() : "",
+ const payload = {
+  role: profile.role,
+  name: profile.name,
+  phone: profile.phone,
+  carBrand: profile.carBrand || "",
+  carNumber: profile.carNumber || "",
+  photo: profile.photo || "",
 
-    from,
-    to,
-    type,
-    price,
-    seats: seatsNum,
-    comment,
+  from,
+  to,
+  type,
+  price,
+  seats: seatsNum,
+  comment,
 
-    lat: geo?.lat || null,
-    lng: geo?.lng || null,
-  };
+  lat: geo?.lat || null,
+  lng: geo?.lng || null,
+
+  // ✅ дубли для совместимости с любым backend
+  full_name: profile.name,
+  car_brand: profile.carBrand || "",
+  car_number: profile.carNumber || "",
+  photo_url: profile.photo || "",
+  pointA: from,
+  pointB: to,
+  createdAt: Date.now(),
+};
+
+ 
 
   try{
     const r = await fetch(API + "/api/ads", {
