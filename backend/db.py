@@ -1,121 +1,52 @@
-import sqlite3
+import json
+import time
 from pathlib import Path
 
-DB_PATH = Path("data.sqlite")
+DB_FILE = Path("db.json")
 
+def _load():
+    if not DB_FILE.exists():
+        DB_FILE.write_text(json.dumps({"ads": [], "likes": {}}, ensure_ascii=False), encoding="utf-8")
+    return json.loads(DB_FILE.read_text(encoding="utf-8"))
 
-def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
+def _save(data):
+    DB_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
+    _load()
 
-    # ADS
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS ads (
-      id TEXT PRIMARY KEY,
-      role TEXT,
-      name TEXT,
-      phone TEXT,
-      carBrand TEXT,
-      carNumber TEXT,
-      photo TEXT,
-      "from" TEXT,
-      "to" TEXT,
-      type TEXT,
-      price TEXT,
-      seats INTEGER,
-      comment TEXT,
-      lat REAL,
-      lng REAL,
-      created_at INTEGER
-    )
-    """)
-
-    # LIKES
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS likes (
-      phone TEXT PRIMARY KEY,
-      likes INTEGER DEFAULT 0
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
+def cleanup_ads(max_age_ms: int):
+    data = _load()
+    now = int(time.time() * 1000)
+    before = len(data["ads"])
+    data["ads"] = [a for a in data["ads"] if now - int(a.get("created_at", 0)) < max_age_ms]
+    if len(data["ads"]) != before:
+        _save(data)
 
 def add_ad(ad: dict):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-    INSERT INTO ads (
-      id, role, name, phone, carBrand, carNumber, photo,
-      "from", "to", type, price, seats, comment, lat, lng, created_at
-    )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (
-        ad["id"], ad["role"], ad["name"], ad["phone"],
-        ad.get("carBrand",""), ad.get("carNumber",""), ad.get("photo",""),
-        ad.get("from",""), ad.get("to",""), ad.get("type","now"),
-        ad.get("price",""), int(ad.get("seats",0)),
-        ad.get("comment",""), ad.get("lat"), ad.get("lng"),
-        int(ad["created_at"])
-    ))
-
-    conn.commit()
-    conn.close()
-
+    data = _load()
+    data["ads"].append(ad)
+    _save(data)
 
 def get_ads():
-    conn = get_conn()
-    cur = conn.cursor()
-    rows = cur.execute("""SELECT * FROM ads ORDER BY created_at DESC""").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def delete_old_ads(cutoff_ts: int):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""DELETE FROM ads WHERE created_at < ?""", (cutoff_ts,))
-    conn.commit()
-    conn.close()
-
+    data = _load()
+    # newest first
+    return sorted(data["ads"], key=lambda x: x.get("created_at", 0), reverse=True)
 
 def like_phone(phone: str) -> int:
-    conn = get_conn()
-    cur = conn.cursor()
-
-    row = cur.execute("SELECT likes FROM likes WHERE phone=?", (phone,)).fetchone()
-    if row is None:
-        cur.execute("INSERT INTO likes(phone, likes) VALUES(?, ?)", (phone, 1))
-        likes = 1
-    else:
-        likes = int(row["likes"]) + 1
-        cur.execute("UPDATE likes SET likes=? WHERE phone=?", (likes, phone))
-
-    conn.commit()
-    conn.close()
+    data = _load()
+    likes = data["likes"].get(phone, 0) + 1
+    data["likes"][phone] = likes
+    _save(data)
     return likes
 
-
 def get_points(phone: str) -> int:
-    conn = get_conn()
-    cur = conn.cursor()
-    row = cur.execute("SELECT likes FROM likes WHERE phone=?", (phone,)).fetchone()
-    conn.close()
-    return int(row["likes"]) if row else 0
-
+    data = _load()
+    return int(data["likes"].get(phone, 0))
 
 def top_list(limit: int = 20):
-    conn = get_conn()
-    cur = conn.cursor()
-    rows = cur.execute("""
-      SELECT phone, likes FROM likes ORDER BY likes DESC LIMIT ?
-    """, (limit,)).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    data = _load()
+    items = [{"phone": p, "likes": int(v)} for p, v in data["likes"].items()]
+    items.sort(key=lambda x: x["likes"], reverse=True)
+    return items[:limit]
+
