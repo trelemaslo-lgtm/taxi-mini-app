@@ -831,4 +831,50 @@ body{
   opacity:.75;
   font-weight:900;
 }
+.detail-box{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.detail-top{
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+
+.detail-avatar{
+  width:58px;
+  height:58px;
+  border-radius:18px;
+  background: rgba(246,195,0,.18);
+  border:1px solid rgba(246,195,0,.35);
+  background-size:cover;
+  background-position:center;
+  flex:0 0 auto;
+}
+
+.detail-name{
+  font-weight:1000;
+  font-size:16px;
+}
+.detail-sub{
+  font-size:12px;
+  opacity:.75;
+  margin-top:2px;
+}
+
+.detail-route{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  font-weight:900;
+}
+
+.detail-grid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
 
