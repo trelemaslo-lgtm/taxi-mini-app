@@ -511,6 +511,16 @@ async function loadAds(){
     cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ ${t("publish_error")}</div></div>`;
   }
 }
+async function getPoints(phone){
+  if(!phone) return 0;
+  try{
+    const r = await fetch(API + "/api/points?phone=" + encodeURIComponent(phone));
+    const j = await r.json();
+    return Number(j.likes || 0);
+  }catch(e){
+    return 0;
+  }
+}
 
 // ====== LIKE (backend real) ======
 window.likeDriver = async (phone)=>{
@@ -521,11 +531,15 @@ window.likeDriver = async (phone)=>{
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ phone })
     });
+
+    // reload cards + profile
     loadAds();
+    renderProfileView();
   }catch(e){
     console.log(e);
   }
 };
+
 
 // ====== RENDER CARD ======
 function renderCard(ad, geo){
@@ -573,9 +587,9 @@ function renderCard(ad, geo){
       </div>
 
       <div class="card-info">
-        <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
-        <div class="badge">👥 ${escapeHtml(String(ad.seats ?? ""))}</div>
-        <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
+       <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
+${dist ? `<div class="badge">${dist}</div>` : ""}
+<div class="badge" id="pts-${escapeHtml(ad.id || ad.phone)}">🏆 …</div>
         ${dist ? `<div class="badge">${dist}</div>` : ""}
       </div>
 
