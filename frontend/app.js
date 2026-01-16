@@ -727,14 +727,16 @@ if(from.length < 2 || to.length < 2 || price.length < 1){
   const geoEnabled = document.getElementById("geoToggle")?.checked;
   const geo = geoEnabled ? getGeo() : null;
 
- const payload = {
+const payload = {
+  // основа
   role: profile.role,
-  name: profile.name,
-  phone: profile.phone,
-  carBrand: profile.carBrand || "",
-  carNumber: profile.carNumber || "",
-  photo: profile.photo || "",
+  name: (profile.name || "").trim(),
+  phone: (profile.phone || "").trim(),
+  carBrand: (profile.carBrand || "").trim(),
+  carNumber: (profile.carNumber || "").trim(),
+  photo: (profile.photo || "").trim(),
 
+  // объявление
   from,
   to,
   type,
@@ -742,8 +744,20 @@ if(from.length < 2 || to.length < 2 || price.length < 1){
   seats: seatsNum,
   comment,
 
+  // geo
   lat: geo?.lat || null,
   lng: geo?.lng || null,
+
+  // ✅ дубли для любого backend (чтобы точно сохранилось)
+  full_name: (profile.name || "").trim(),
+  car_brand: (profile.carBrand || "").trim(),
+  car_number: (profile.carNumber || "").trim(),
+  photo_url: (profile.photo || "").trim(),
+  pointA: from,
+  pointB: to,
+  createdAt: Date.now()
+};
+
 
   // ✅ дубли для совместимости с любым backend
   full_name: profile.name,
