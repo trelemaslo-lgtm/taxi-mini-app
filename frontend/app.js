@@ -728,21 +728,35 @@ window.publishAd = async ()=>{
     lng: geo?.lng || null,
   };
 
-  try{
-   console.log("✅ payload yuborildi:", payload);
+ try{
+  console.log("✅ payload yuborildi:", payload);
 
-const r = await fetch(API + "/api/ads", {
-  method:"POST",
-  headers:{ "Content-Type":"application/json" },
-  body: JSON.stringify(payload)
-});
+  const r = await fetch(API + "/api/ads", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(payload)
+  });
 
-const j = await r.json().catch(()=> ({}));
-console.log("✅ backend javobi:", j);
+  const text = await r.text();
+  console.log("✅ status:", r.status);
+  console.log("✅ backend javobi:", text);
 
-if(!r.ok){
-  throw new Error("Publish failed");
+  if(!r.ok){
+    toast("❌ Backend error: " + text, true);
+    return;
+  }
+
+  closeSheet("createAdSheet");
+  toast(t("published_ok"));
+  clearAdForm();
+  loadAds();
+  renderMyAds();
+
+}catch(e){
+  console.log("❌ publishAd ERROR:", e);
+  toast("❌ Front error: " + (e.message || e), true);
 }
+
 
 closeSheet("createAdSheet");
 toast(t("published_ok"));
