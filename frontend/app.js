@@ -513,8 +513,8 @@ async function loadAds(){
     });
 
     /list = list.filter(a => {
-  const from = String(a.from ?? a.pointA ?? "").trim();
-  const to = String(a.to ?? a.pointB ?? "").trim();
+const from = String((a.from !== undefined && a.from !== null) ? a.from : (a.pointA || "")).trim();
+const to   = String((a.to   !== undefined && a.to   !== null) ? a.to   : (a.pointB || "")).trim();
   return from.length > 0 && to.length > 0;
 });
 
