@@ -775,6 +775,16 @@ if(!profile.phone || String(profile.phone).trim().length < 5){
     toast("❌ Front error: " + (e.message || e), true);
   }
 };
+function clearAdForm(){
+  const ids = ["ad-from","ad-to","ad-price","ad-seats","ad-comment"];
+  ids.forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = "";
+  });
+
+  const typeEl = document.getElementById("ad-type");
+  if(typeEl) typeEl.value = "now";
+}
 
 
 // ====== PROFILE VIEW ======
