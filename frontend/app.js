@@ -718,67 +718,48 @@ window.publishAd = async ()=>{
     carBrand: profile.carBrand || "",
     carNumber: profile.carNumber || "",
     photo: profile.photo || "",
+
     from,
     to,
     type,
     price,
     seats: seatsNum,
     comment,
-    lat: geo?.lat || null,
-    lng: geo?.lng || null,
+
+    lat: geo ? geo.lat : null,
+    lng: geo ? geo.lng : null
   };
 
- try{
-  console.log("✅ payload yuborildi:", payload);
+  try{
+    console.log("✅ payload yuborildi:", payload);
 
-  const r = await fetch(API + "/api/ads", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(payload)
-  });
+    const r = await fetch(API + "/api/ads", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
 
-  const text = await r.text();
-  console.log("✅ status:", r.status);
-  console.log("✅ backend javobi:", text);
+    const text = await r.text();
+    console.log("✅ status:", r.status);
+    console.log("✅ backend javobi:", text);
 
-  if(!r.ok){
-    toast("❌ Backend error: " + text, true);
-    return;
-  }
-
-  closeSheet("createAdSheet");
-  toast(t("published_ok"));
-  clearAdForm();
-  loadAds();
-  renderMyAds();
-
-}catch(e){
-  console.log("❌ publishAd ERROR:", e);
-  toast("❌ Front error: " + (e.message || e), true);
-}
-
-
-closeSheet("createAdSheet");
-toast(t("published_ok"));
-
+    if(!r.ok){
+      toast("❌ Backend error: " + text, true);
+      return;
+    }
 
     closeSheet("createAdSheet");
     toast(t("published_ok"));
     clearAdForm();
     loadAds();
     renderMyAds();
+
   }catch(e){
-    console.log("Publish error:", e);
-    toast(t("publish_error"), true);
+    console.log("❌ publishAd ERROR:", e);
+    toast("❌ Front error: " + (e.message || e), true);
   }
 };
 
-function clearAdForm(){
-  ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.value = "";
-  });
-}
 
 // ====== PROFILE VIEW ======
 function renderProfileView(){
