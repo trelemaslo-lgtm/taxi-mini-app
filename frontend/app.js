@@ -587,6 +587,11 @@ function renderCard(ad, geo){
       </div>
     </div>
   `;
+card.onclick = (e)=>{
+  // like bosilsa detail ochilmasin
+  if(e.target && e.target.classList && e.target.classList.contains("like-btn")) return;
+  openAdDetail(ad, geo);
+};
 
   return card;
 }
@@ -952,4 +957,69 @@ function escapeJs(str){
     .replace(/\\/g, "\\\\")
     .replace(/'/g, "\\'")
     .replace(/"/g, '\\"');
+}
+function openAdDetail(ad, geo){
+  const box = document.getElementById("adDetailContent");
+  if(!box) return;
+
+  const name = ad.name || "—";
+  const carLine = `${ad.carBrand || ""} ${ad.carNumber || ""}`.trim();
+
+  const from = ad.from || ad.pointA || "—";
+  const to = ad.to || ad.pointB || "—";
+
+  let dist = "";
+  if(geo && ad.lat && ad.lng){
+    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
+    dist = `📍 ${d.toFixed(1)} km`;
+  }
+
+  const typeLabel = (function(){
+    if(ad.type==="now") return t("type_now");
+    if(ad.type==="20") return t("type_20");
+    return t("type_fill");
+  })();
+
+  const avatarStyle = ad.photo
+    ? `style="background-image:url('${escapeHtml(ad.photo)}')"`
+    : "";
+
+  box.innerHTML = `
+    <div class="detail-top">
+      <div class="detail-avatar" ${avatarStyle}></div>
+      <div>
+        <div class="detail-name">${escapeHtml(name)}</div>
+        <div class="detail-sub">${escapeHtml(carLine || (ad.role==="client" ? "👤 Client" : ""))}</div>
+        <div class="detail-sub">${escapeHtml(ad.phone || "")}</div>
+      </div>
+    </div>
+
+    <div class="detail-route">
+      <span class="route-pill">📍 ${escapeHtml(from)}</span>
+      <span>→</span>
+      <span class="route-pill">📍 ${escapeHtml(to)}</span>
+    </div>
+
+    <div class="detail-grid">
+      <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
+      <div class="badge">👥 ${escapeHtml(String(ad.seats ?? ""))}</div>
+      <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
+      ${dist ? `<div class="badge">${dist}</div>` : ""}
+    </div>
+
+    <div class="badge">${escapeHtml(ad.comment || "")}</div>
+  `;
+
+  // buttons
+  const callBtn = document.getElementById("detailCallBtn");
+  const msgBtn = document.getElementById("detailMsgBtn");
+
+  if(callBtn){
+    callBtn.onclick = ()=> callPhone(ad.phone || "");
+  }
+  if(msgBtn){
+    msgBtn.onclick = ()=> msgUser(ad.phone || "", name);
+  }
+
+  openSheet("adDetailSheet");
 }
