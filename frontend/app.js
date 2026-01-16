@@ -728,15 +728,24 @@ window.publishAd = async ()=>{
   };
 
   try{
-    const r = await fetch(API + "/api/ads", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify(payload)
-    });
+   console.log("✅ payload yuborildi:", payload);
 
-    if(!r.ok){
-      throw new Error("Publish failed");
-    }
+const r = await fetch(API + "/api/ads", {
+  method:"POST",
+  headers:{ "Content-Type":"application/json" },
+  body: JSON.stringify(payload)
+});
+
+const j = await r.json().catch(()=> ({}));
+console.log("✅ backend javobi:", j);
+
+if(!r.ok){
+  throw new Error("Publish failed");
+}
+
+closeSheet("createAdSheet");
+toast(t("published_ok"));
+
 
     closeSheet("createAdSheet");
     toast(t("published_ok"));
