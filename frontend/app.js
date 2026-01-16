@@ -705,22 +705,19 @@ window.publishAd = async ()=>{
     return;
   }
 
-  const from = fromEl.value.trim();
-  const to = toEl.value.trim();
-  const type = typeEl.value;
-  const price = priceEl.value.trim();
-  const seats = seatsEl.value.trim();
-  const comment = (commentEl?.value || "").trim();
-  // ✅ жёсткая проверка маршрута
+ const from = (fromEl.value || "").trim();
+const to = (toEl.value || "").trim();
+const type = typeEl.value;
+const price = (priceEl.value || "").trim();
+const seats = (seatsEl.value || "").trim();
+const comment = (commentEl?.value || "").trim();
+
+// ✅ жёсткая проверка маршрута
 if(from.length < 2 || to.length < 2 || price.length < 1){
   toast(t("fill_required"), true);
   return;
 }
 
-  if(!from || !to || !price){
-    alert(t("fill_required"));
-    return;
-  }
 
   let seatsNum = parseInt(seats || "0", 10);
   if(Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
