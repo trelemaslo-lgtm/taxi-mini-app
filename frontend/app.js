@@ -464,6 +464,20 @@ function updateSortLine(){
 async function loadAds(){
   const cards = document.getElementById("cards");
   if(!cards) return;
+// cleanup + filter by feed
+let list = Array.isArray(data) ? data : [];
+
+// feed mapping:
+list = list.filter(a => {
+  if(FEED_MODE==="drivers") return a.role === "driver";
+  return a.role === "client";
+});
+// ✅ показываем только объявления где есть маршрут A и B (чтобы выглядело идеально)
+list = list.filter(a => {
+  const from = String(a.from ?? a.pointA ?? a.a ?? "").trim();
+  const to   = String(a.to ?? a.pointB ?? a.b ?? "").trim();
+  return from.length > 1 && to.length > 1;
+});
 
   // skeleton
   cards.innerHTML = `
@@ -697,6 +711,11 @@ window.publishAd = async ()=>{
   const price = priceEl.value.trim();
   const seats = seatsEl.value.trim();
   const comment = (commentEl?.value || "").trim();
+  // ✅ жёсткая проверка маршрута
+if(from.length < 2 || to.length < 2 || price.length < 1){
+  toast(t("fill_required"), true);
+  return;
+}
 
   if(!from || !to || !price){
     alert(t("fill_required"));
