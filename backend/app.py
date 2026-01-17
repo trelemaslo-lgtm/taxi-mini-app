@@ -1,362 +1,624 @@
+import os
+import time
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import time
-import os
+from dotenv import load_dotenv
 
-from db import (
-    init_db,
-    ads_create,
-    ads_list,
-    profile_save,
-    profile_get,
-    profiles_all,
-    profile_verify,
-    profile_ban,
-    like_add,
-    points_get,
-    rating_get,
-    review_add,
-    top_drivers,
-    banner_set,
-    banner_get,
-    orders_my,
-    order_create,
-)
+import db as DB
 
-# ===== CONFIG =====
-ADMIN_TG_ID = os.environ.get("ADMIN_TG_ID", "6813692852")  # <-- YOUR TELEGRAM ID
-APP_SECRET = os.environ.get("APP_SECRET", "711GROUP")
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-init_db()
+# ===== ENV =====
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+BUCKET_NAME = os.getenv("BUCKET_NAME", "taxi-medi")
+ADMIN_TELEGRAM_ID = str(os.getenv("ADMIN_TELEGRAM_ID", "")).strip()
 
-# ===== HELPERS =====
-def now_ms():
-    return int(time.time() * 1000)
+MAX_FILE_MB = 8
 
-def get_tg_user_id():
-    """
-    Simple way:
-    Frontend sends X-TG-INITDATA header (Telegram WebApp initData).
-    Full real verify requires HMAC validation.
-    For now we read tg id from initDataUnsafe is not possible on backend,
-    so we allow client to pass tg_id in header too (optional).
-    """
-    # optional fast header
-    tg_id = request.headers.get("X-TG-ID", "").strip()
-    if tg_id:
-        return tg_id
-
-    # fallback: try parse initdata (not fully verified)
-    initdata = request.headers.get("X-TG-INITDATA", "")
-    if not initdata:
-        return ""
-    # telegram initData contains "user=%7B...id...%7D"
-    # We won't decode fully to keep it simple stable.
-    # Better: pass tg_id explicitly from frontend later.
-    return ""
-
-def is_admin():
-    # allow admin by ENV or secret key fallback
-    tg_id = request.headers.get("X-TG-ID", "").strip()
-    if tg_id and tg_id == str(ADMIN_TG_ID):
-        return True
-    # fallback secret
-    key = request.headers.get("X-ADMIN-KEY", "")
-    if key and key == APP_SECRET:
-        return True
-    return False
+def now_ts():
+    return int(time.time())
 
 def ok(data=None):
-    resp = {"ok": True}
-    if data:
-        resp.update(data)
-    return jsonify(resp)
+    return jsonify({"ok": True, **(data or {})})
 
-def err(msg="error", code=400):
-    return jsonify({"ok": False, "error": msg}), code
+def err(message, code=400, extra=None):
+    payload = {"ok": False, "error": message}
+    if extra:
+        payload.update(extra)
+    return jsonify(payload), code
 
-# ===== ROOT =====
-@app.route("/")
-def root():
-    return jsonify({
-        "ok": True,
-        "name": "711 TAXI BACKEND",
-        "time": now_ms()
-    })
+def is_admin(tid: str) -> bool:
+    return str(tid) == ADMIN_TELEGRAM_ID
 
-# ===== ADS =====
-@app.route("/api/ads", methods=["GET"])
-def api_ads_list():
-    try:
-        limit = int(request.args.get("limit", "30"))
-        offset = int(request.args.get("offset", "0"))
-        if limit < 1: limit = 30
-        if limit > 100: limit = 100
-        if offset < 0: offset = 0
+def require_tid(data, key="telegram_id"):
+    tid = str(data.get(key, "")).strip()
+    if not tid:
+        return None
+    return tid
 
-        items = ads_list(limit=limit, offset=offset)
+# =========================
+# HEALTH
+# =========================
+@app.get("/api/health")
+def health():
+    return ok({"ts": now_ts(), "admin": bool(ADMIN_TELEGRAM_ID)})
 
-        # enrich: points + rating + reviews_count + online from profile
-        enriched = []
-        for a in items:
-            phone = a.get("phone") or ""
-            pts = points_get(phone)
-            avg, cnt = rating_get(phone)
-            pr = profile_get(phone) or {}
+# =========================
+# UPLOAD (SUPABASE STORAGE)
+# device only
+# =========================
+@app.post("/api/upload")
+def upload():
+    if "file" not in request.files:
+        return err("file required", 400)
 
-            a["points"] = pts
-            a["rating"] = float(avg or 0)
-            a["reviews_count"] = int(cnt or 0)
-            a["online"] = int(pr.get("online", 1) or 0)
+    f = request.files["file"]
+    if not f:
+        return err("empty file", 400)
 
-            # ensure fields exist
-            a["photo"] = a.get("photo") or pr.get("photo") or ""
-            a["carBrand"] = a.get("carBrand") or pr.get("carBrand") or ""
-            a["carNumber"] = a.get("carNumber") or pr.get("carNumber") or ""
-            a["name"] = a.get("name") or pr.get("name") or ""
+    # size limit
+    f.stream.seek(0, 2)
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > MAX_FILE_MB * 1024 * 1024:
+        return err(f"file too large (max {MAX_FILE_MB}MB)", 413)
 
-            enriched.append(a)
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return err("supabase env missing", 500)
 
-        next_offset = offset + len(items)
+    content = f.read()
+    filename = f"{int(time.time()*1000)}_{f.filename}".replace(" ", "_")
+    path = f"uploads/{filename}"
 
-        return ok({"items": enriched, "next_offset": next_offset})
+    upload_url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET_NAME}/{path}"
 
-    except Exception as e:
-        return err("ads list error", 500)
+    r = requests.post(
+        upload_url,
+        headers={
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+            "apikey": SUPABASE_ANON_KEY,
+            "Content-Type": f.mimetype or "application/octet-stream",
+        },
+        data=content
+    )
 
-@app.route("/api/ads", methods=["POST"])
-def api_ads_create():
-    try:
-        payload = request.json or {}
+    if not r.ok:
+        return err("upload failed", 500, {"status": r.status_code, "detail": r.text})
 
-        # debug log
-        print("📩 /api/ads payload:", payload)
+    public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{path}"
+    return ok({"url": public_url})
 
-        if not payload.get("from") or not payload.get("to") or not payload.get("price"):
-            return err("missing fields", 400)
+# =========================
+# USERS
+# =========================
+@app.post("/api/users/upsert")
+def users_upsert():
+    data = request.json or {}
+    tid = require_tid(data)
+    if not tid:
+        return err("telegram_id required")
 
-        ok_save = ads_create(payload)
-        if not ok_save:
-            return err("failed to create", 500)
+    DB.upsert_user(
+        telegram_id=tid,
+        role=str(data.get("role", "")).strip(),
+        name=str(data.get("name", "")).strip(),
+        phone=str(data.get("phone", "")).strip(),
+        username=str(data.get("username", "")).strip(),
+        bio=str(data.get("bio", "")).strip(),
+        photo_url=str(data.get("photo_url", "")).strip(),
+        cover_url=str(data.get("cover_url", "")).strip(),
+        city=str(data.get("city", "")).strip(),
+    )
+    return ok()
 
-        return ok({"saved": True})
-
-    except Exception as e:
-        print("❌ /api/ads ERROR:", str(e))
-        return err("publish error", 500)
-
-
-# ===== PROFILE =====
-@app.route("/api/profile/save", methods=["POST"])
-def api_profile_save():
-    try:
-        payload = request.json or {}
-        tg_id = request.headers.get("X-TG-ID", "").strip()
-
-        if not payload.get("phone"):
-            return err("phone required", 400)
-
-        profile_save(payload, tg_id=tg_id)
-        return ok({"saved": True})
-
-    except Exception as e:
-        return err("profile save error", 500)
-
-@app.route("/api/profile/get", methods=["GET"])
-def api_profile_get():
-    phone = request.args.get("phone", "").strip()
-    if not phone:
-        return err("phone required", 400)
-    p = profile_get(phone)
-    if not p:
+@app.get("/api/users/<telegram_id>")
+def users_get(telegram_id):
+    u = DB.get_user(str(telegram_id))
+    if not u:
         return err("not found", 404)
-    return ok({"profile": p})
+    u["rating"] = DB.calc_rating(str(telegram_id))
+    u["car_photos"] = DB.list_car_photos(str(telegram_id))
+    return ok({"user": u})
 
-# ===== POINTS =====
-@app.route("/api/points", methods=["GET"])
-def api_points_get():
-    phone = request.args.get("phone", "").strip()
-    if not phone:
-        return err("phone required", 400)
-    pts = points_get(phone)
-    return ok({"points": pts})
+@app.get("/api/users")
+def users_list():
+    role = (request.args.get("role") or "").strip()
+    q = (request.args.get("q") or "").strip()
+    users = DB.list_users(role=role, q=q)
+    return ok({"users": users})
 
-# ===== LIKE =====
-@app.route("/api/like", methods=["POST"])
-def api_like():
-    try:
-        payload = request.json or {}
-        phone = (payload.get("phone") or "").strip()
-        if not phone:
-            return err("phone required", 400)
+# admin verify driver
+@app.post("/api/admin/users/verify")
+def admin_verify():
+    data = request.json or {}
+    tid = require_tid(data)
+    target = str(data.get("target_telegram_id", "")).strip()
+    val = int(data.get("is_verified") or 0)
 
-        from_tg_id = request.headers.get("X-TG-ID", "").strip()
-        if not from_tg_id:
-            # allow anonymous like in dev but stable:
-            from_tg_id = request.remote_addr or "anon"
+    if not is_admin(tid):
+        return err("forbidden", 403)
+    if not target:
+        return err("target_telegram_id required")
 
-        ok_like, msg = like_add(from_tg_id=from_tg_id, target_phone=phone)
-        if not ok_like:
-            if msg == "cooldown":
-                return err("cooldown 24h", 429)
-            return err("like error", 400)
+    DB.set_verified(target, val)
+    return ok()
 
-        return ok({"liked": True, "points": points_get(phone)})
+# =========================
+# CAR GALLERY
+# =========================
+@app.post("/api/car-photos/add")
+def car_photo_add():
+    data = request.json or {}
+    tid = require_tid(data)
+    url = str(data.get("image_url", "")).strip()
+    if not tid:
+        return err("telegram_id required")
+    if not url:
+        return err("image_url required")
 
-    except Exception as e:
-        return err("like error", 500)
+    DB.add_car_photo(tid, url)
+    return ok()
 
-# ===== REVIEWS =====
-@app.route("/api/reviews/add", methods=["POST"])
-def api_review_add():
-    try:
-        payload = request.json or {}
-        phone = (payload.get("phone") or "").strip()
-        rating = payload.get("rating", 5)
-        text = payload.get("text", "")
-
-        if not phone:
-            return err("phone required", 400)
-
-        from_tg_id = request.headers.get("X-TG-ID", "").strip()
-        if not from_tg_id:
-            from_tg_id = request.remote_addr or "anon"
-
-        review_add(from_tg_id, phone, rating, text)
-        avg, cnt = rating_get(phone)
-        return ok({"avg": avg, "count": cnt})
-
-    except Exception as e:
-        return err("review error", 500)
-
-@app.route("/api/reviews/rating", methods=["GET"])
-def api_reviews_rating():
-    phone = request.args.get("phone", "").strip()
-    if not phone:
-        return err("phone required", 400)
-    avg, cnt = rating_get(phone)
-    return ok({"avg": avg, "count": cnt})
-
-# ===== TOP DRIVERS =====
-@app.route("/api/top/drivers", methods=["GET"])
-def api_top_drivers():
-    try:
-        items = top_drivers(limit=20)
-        return jsonify(items)
-    except Exception as e:
-        return err("top drivers error", 500)
-
-# ===== BANNER =====
-@app.route("/api/banner", methods=["GET"])
-def api_banner():
-    try:
-        b = banner_get()
-        if not b:
-            return ok({"banner": None})
-        return ok({"banner": b})
-    except Exception as e:
-        return err("banner error", 500)
-
-@app.route("/api/admin/banner/set", methods=["POST"])
-def api_admin_banner_set():
-    if not is_admin():
-        return err("not admin", 403)
-
-    payload = request.json or {}
-    title = payload.get("title", "")[:80]
-    text = payload.get("text", "")[:220]
-    image = payload.get("image", "")[:400]
-    link = payload.get("link", "")[:400]
-    active = int(payload.get("active", 1) or 1)
-
-    banner_set(title, text, image=image, link=link, active=active)
-    return ok({"saved": True})
-
-@app.route("/api/admin/banner/off", methods=["POST"])
-def api_admin_banner_off():
-    if not is_admin():
-        return err("not admin", 403)
-
-    banner_set("", "", image="", link="", active=0)
-    return ok({"off": True})
-
-# ===== ADMIN PROFILES =====
-@app.route("/api/admin/profiles", methods=["GET"])
-def api_admin_profiles():
-    if not is_admin():
-        return err("not admin", 403)
-
-    items = profiles_all()
-
-    # enrich points rating
-    for p in items:
-        phone = p.get("phone") or ""
-        p["points"] = points_get(phone)
-        avg, cnt = rating_get(phone)
-        p["rating"] = float(avg or 0)
-        p["reviews_count"] = int(cnt or 0)
-
+@app.get("/api/car-photos/<telegram_id>")
+def car_photo_list(telegram_id):
+    items = DB.list_car_photos(str(telegram_id))
     return ok({"items": items})
 
-@app.route("/api/admin/profile/verify", methods=["POST"])
-def api_admin_profile_verify():
-    if not is_admin():
-        return err("not admin", 403)
+@app.delete("/api/car-photos/<int:photo_id>")
+def car_photo_delete(photo_id):
+    tid = (request.args.get("telegram_id") or "").strip()
+    if not tid:
+        return err("telegram_id required")
+    DB.delete_car_photo(photo_id, tid)
+    return ok()
 
-    payload = request.json or {}
-    phone = (payload.get("phone") or "").strip()
-    verified = bool(payload.get("verified", False))
+# =========================
+# ADS
+# =========================
+@app.get("/api/ads")
+def ads_list():
+    ads = DB.list_ads()
 
-    if not phone:
-        return err("phone required", 400)
+    # add points, views, rating, badges
+    for a in ads:
+        a["points"] = DB.points_for_phone(a.get("phone", "") or "")
+        a["views"] = DB.views_for_ad(int(a["id"]))
+        a["rating"] = DB.calc_rating(str(a.get("telegram_id", "")))
+        # auto status update
+        if int(a.get("seats") or 0) == 0:
+            a["status"] = "full"
 
-    profile_verify(phone, verified=verified)
-    return ok({"updated": True})
+    return ok({"ads": ads})
 
-@app.route("/api/admin/profile/ban", methods=["POST"])
-def api_admin_profile_ban():
-    if not is_admin():
-        return err("not admin", 403)
+@app.post("/api/ads")
+def ads_create():
+    data = request.json or {}
+    tid = require_tid(data)
+    if not tid:
+        return err("telegram_id required")
 
-    payload = request.json or {}
-    phone = (payload.get("phone") or "").strip()
-    banned = bool(payload.get("banned", False))
+    frm = str(data.get("from","")).strip()
+    too = str(data.get("to","")).strip()
+    price = str(data.get("price","")).strip()
 
-    if not phone:
-        return err("phone required", 400)
+    if not frm or not too or not price:
+        return err("from/to/price required")
 
-    profile_ban(phone, banned=banned)
-    return ok({"updated": True})
+    seats = int(data.get("seats") or 0)
+    if seats < 0:
+        seats = 0
+    if seats > 8:
+        seats = 8
 
-# ===== ORDERS =====
-@app.route("/api/orders/create", methods=["POST"])
-def api_orders_create():
-    payload = request.json or {}
+    payload = {
+        "telegram_id": tid,
+        "role": str(data.get("role","")).strip(),
+        "name": str(data.get("name","")).strip(),
+        "phone": str(data.get("phone","")).strip(),
+        "car_brand": str(data.get("car_brand","")).strip(),
+        "car_number": str(data.get("car_number","")).strip(),
+        "photo_url": str(data.get("photo_url","")).strip(),
 
-    client_phone = (payload.get("client_phone") or "").strip()
-    driver_phone = (payload.get("driver_phone") or "").strip()
-    from_ = (payload.get("from") or "").strip()
-    to_ = (payload.get("to") or "").strip()
-    price = (payload.get("price") or "").strip()
+        "from": frm,
+        "to": too,
+        "type": str(data.get("type","now")).strip(),
+        "price": price,
+        "seats": seats,
+        "comment": str(data.get("comment","")).strip(),
 
-    if not client_phone or not driver_phone:
-        return err("missing client/driver", 400)
+        "lat": data.get("lat", None),
+        "lng": data.get("lng", None),
 
-    order_create(client_phone, driver_phone, from_, to_, price)
-    return ok({"created": True})
+        "is_vip": int(data.get("is_vip") or 0),
+        "is_pinned": int(data.get("is_pinned") or 0),
+        "status": "active" if seats > 0 else "full",
+    }
 
-@app.route("/api/orders/my", methods=["GET"])
-def api_orders_my():
-    phone = request.args.get("phone", "").strip()
-    if not phone:
-        return err("phone required", 400)
-    items = orders_my(phone)
+    ad_id = DB.create_ad(payload)
+    return ok({"ad_id": ad_id})
+
+@app.get("/api/ads/<int:ad_id>")
+def ads_get(ad_id):
+    ad = DB.get_ad(ad_id)
+    if not ad:
+        return err("not found", 404)
+    ad["points"] = DB.points_for_phone(ad.get("phone","") or "")
+    ad["views"] = DB.views_for_ad(ad_id)
+    ad["rating"] = DB.calc_rating(str(ad.get("telegram_id","")))
+    return ok({"ad": ad})
+
+@app.put("/api/ads/<int:ad_id>")
+def ads_edit(ad_id):
+    data = request.json or {}
+    tid = require_tid(data)
+    if not tid:
+        return err("telegram_id required")
+
+    ok_edit = DB.update_ad(ad_id, tid, data)
+    if not ok_edit:
+        return err("forbidden or not found", 403)
+    return ok()
+
+@app.delete("/api/ads/<int:ad_id>")
+def ads_delete(ad_id):
+    tid = (request.args.get("telegram_id") or "").strip()
+    if not tid:
+        return err("telegram_id required")
+
+    ad = DB.get_ad(ad_id)
+    if not ad:
+        return err("not found", 404)
+
+    if str(ad.get("telegram_id")) != str(tid) and not is_admin(tid):
+        return err("forbidden", 403)
+
+    DB.delete_ad(ad_id)
+    return ok()
+
+# seats +/- (driver only)
+@app.post("/api/ads/<int:ad_id>/seats")
+def ads_seats(ad_id):
+    data = request.json or {}
+    tid = require_tid(data)
+    if not tid:
+        return err("telegram_id required")
+
+    delta = int(data.get("delta") or 0)
+    new_seats = DB.change_ad_seats(ad_id, tid, delta)
+    if new_seats is None:
+        return err("forbidden or not found", 403)
+
+    return ok({"seats": new_seats})
+
+# view counter unique
+@app.post("/api/ads/<int:ad_id>/view")
+def ads_view(ad_id):
+    data = request.json or {}
+    viewer = str(data.get("viewer_telegram_id","")).strip()
+    if not viewer:
+        return err("viewer_telegram_id required")
+    views = DB.add_view(ad_id, viewer)
+    return ok({"views": views})
+
+# admin pin/vip
+@app.post("/api/admin/ads/pin")
+def admin_pin():
+    data = request.json or {}
+    tid = require_tid(data)
+    if not tid or not is_admin(tid):
+        return err("forbidden", 403)
+    ad_id = int(data.get("ad_id") or 0)
+    val = int(data.get("is_pinned") or 0)
+    DB.pin_ad(ad_id, val)
+    return ok()
+
+@app.post("/api/admin/ads/vip")
+def admin_vip():
+    data = request.json or {}
+    tid = require_tid(data)
+    if not tid or not is_admin(tid):
+        return err("forbidden", 403)
+    ad_id = int(data.get("ad_id") or 0)
+    val = int(data.get("is_vip") or 0)
+    DB.vip_ad(ad_id, val)
+    return ok()
+
+# =========================
+# LIKES / POINTS
+# =========================
+@app.post("/api/like")
+def like_phone():
+    data = request.json or {}
+    target_phone = str(data.get("target_phone","")).strip()
+    from_tid = str(data.get("from_telegram_id","")).strip()
+
+    if not target_phone or not from_tid:
+        return err("target_phone/from_telegram_id required")
+
+    points = DB.like_phone(target_phone, from_tid)
+    return ok({"points": points})
+
+# =========================
+# FAVORITES
+# =========================
+@app.post("/api/favorites/add")
+def fav_add():
+    data = request.json or {}
+    tid = require_tid(data)
+    target = str(data.get("target_telegram_id","")).strip()
+    if not tid:
+        return err("telegram_id required")
+    if not target:
+        return err("target_telegram_id required")
+
+    added = DB.add_favorite(tid, target)
+    return ok({"added": bool(added)})
+
+@app.post("/api/favorites/remove")
+def fav_remove():
+    data = request.json or {}
+    tid = require_tid(data)
+    target = str(data.get("target_telegram_id","")).strip()
+    if not tid:
+        return err("telegram_id required")
+    if not target:
+        return err("target_telegram_id required")
+
+    DB.remove_favorite(tid, target)
+    return ok()
+
+@app.get("/api/favorites/<telegram_id>")
+def fav_list(telegram_id):
+    items = DB.list_favorites(str(telegram_id))
     return ok({"items": items})
 
-# ===== RUN =====
+# =========================
+# REVIEWS / RATING
+# =========================
+@app.post("/api/reviews/add")
+def reviews_add():
+    data = request.json or {}
+    tid = require_tid(data, "from_telegram_id")
+    target = str(data.get("target_telegram_id","")).strip()
+    rating = int(data.get("rating") or 0)
+    text = str(data.get("text","")).strip()
+
+    if not tid:
+        return err("from_telegram_id required")
+    if not target:
+        return err("target_telegram_id required")
+    if rating < 1 or rating > 5:
+        return err("rating must be 1..5")
+
+    DB.add_review(target, tid, rating, text)
+    avg = DB.calc_rating(target)
+    return ok({"avg": avg})
+
+@app.get("/api/reviews/<target_telegram_id>")
+def reviews_list(target_telegram_id):
+    items = DB.list_reviews(str(target_telegram_id))
+    avg = DB.calc_rating(str(target_telegram_id))
+    return ok({"items": items, "avg": avg})
+
+@app.get("/api/top-drivers")
+def drivers_top():
+    limit = int(request.args.get("limit") or 20)
+    items = DB.top_drivers(limit)
+    return ok({"items": items})
+
+# =========================
+# REPORTS / COMPLAINTS
+# =========================
+@app.post("/api/reports/add")
+def reports_add():
+    data = request.json or {}
+    from_tid = require_tid(data, "from_telegram_id")
+    target = str(data.get("target_telegram_id","")).strip()
+    reason = str(data.get("reason","")).strip()
+    text = str(data.get("text","")).strip()
+
+    if not from_tid:
+        return err("from_telegram_id required")
+    if not target:
+        return err("target_telegram_id required")
+    if not reason:
+        return err("reason required")
+
+    DB.add_report(target, from_tid, reason, text)
+    return ok()
+
+@app.get("/api/admin/reports")
+def reports_admin_list():
+    tid = (request.args.get("telegram_id") or "").strip()
+    if not is_admin(tid):
+        return err("forbidden", 403)
+    status = (request.args.get("status") or "open").strip()
+    items = DB.list_reports(status)
+    return ok({"items": items})
+
+@app.post("/api/admin/reports/close")
+def reports_admin_close():
+    data = request.json or {}
+    tid = require_tid(data)
+    if not is_admin(tid):
+        return err("forbidden", 403)
+    report_id = int(data.get("report_id") or 0)
+    if not report_id:
+        return err("report_id required")
+    DB.close_report(report_id)
+    return ok()
+
+# =========================
+# NEWS (ADMIN POSTS)
+# =========================
+@app.post("/api/admin/news/create")
+def news_create():
+    data = request.json or {}
+    tid = require_tid(data)
+    if not is_admin(tid):
+        return err("forbidden", 403)
+
+    title = str(data.get("title","")).strip()
+    text = str(data.get("text","")).strip()
+    image_url = str(data.get("image_url","")).strip()
+
+    if not title or not text:
+        return err("title/text required")
+
+    nid = DB.create_news(title, text, image_url)
+    return ok({"news_id": nid})
+
+@app.get("/api/news")
+def news_list():
+    limit = int(request.args.get("limit") or 50)
+    items = DB.list_news(limit)
+    return ok({"items": items})
+
+@app.delete("/api/admin/news/<int:news_id>")
+def news_delete(news_id):
+    tid = (request.args.get("telegram_id") or "").strip()
+    if not is_admin(tid):
+        return err("forbidden", 403)
+    DB.delete_news(news_id)
+    return ok()
+
+# =========================
+# ADMIN BANNER (3 sec on enter)
+# =========================
+@app.post("/api/admin/banner/set")
+def banner_set():
+    data = request.json or {}
+    tid = require_tid(data)
+    if not is_admin(tid):
+        return err("forbidden", 403)
+
+    image_url = str(data.get("image_url","")).strip()
+    if not image_url:
+        return err("image_url required")
+
+    DB.set_banner(image_url)
+    return ok()
+
+@app.get("/api/admin/banner")
+def banner_get():
+    b = DB.get_banner()
+    return ok({"banner": b})
+
+# =========================
+# DONATIONS
+# =========================
+@app.post("/api/donations/add")
+def donation_add():
+    data = request.json or {}
+    tid = require_tid(data)
+    amount = int(data.get("amount") or 0)
+    method = str(data.get("method","manual")).strip()
+
+    if not tid:
+        return err("telegram_id required")
+    if amount <= 0:
+        return err("amount must be > 0")
+
+    DB.add_donation(tid, amount, method)
+    return ok()
+
+@app.get("/api/donations/top")
+def donation_top():
+    limit = int(request.args.get("limit") or 10)
+    items = DB.top_donaters(limit)
+    return ok({"items": items})
+
+@app.get("/api/admin/donations/stats")
+def donation_stats():
+    tid = (request.args.get("telegram_id") or "").strip()
+    if not is_admin(tid):
+        return err("forbidden", 403)
+    st = DB.donation_stats()
+    return ok({"stats": st})
+
+# =========================
+# ORDERS (FLOW)
+# =========================
+@app.post("/api/orders/create")
+def order_create():
+    data = request.json or {}
+    client_tid = str(data.get("client_telegram_id","")).strip()
+    driver_tid = str(data.get("driver_telegram_id","")).strip()
+    ad_id = int(data.get("ad_id") or 0)
+
+    if not client_tid or not driver_tid or not ad_id:
+        return err("client_telegram_id/driver_telegram_id/ad_id required")
+
+    oid = DB.create_order(client_tid, driver_tid, ad_id)
+    return ok({"order_id": oid})
+
+@app.post("/api/orders/status")
+def order_status():
+    data = request.json or {}
+    tid = require_tid(data)  # actor
+    order_id = int(data.get("order_id") or 0)
+    status = str(data.get("status","")).strip()
+    cancel_reason = str(data.get("cancel_reason","")).strip()
+
+    if not tid or not order_id or not status:
+        return err("telegram_id/order_id/status required")
+
+    # status control (basic)
+    allowed = {"created","driver_done","client_arrived","admin_confirmed","cancelled"}
+    if status not in allowed:
+        return err("invalid status")
+
+    # if admin_confirmed -> only admin
+    if status == "admin_confirmed" and not is_admin(tid):
+        return err("admin only", 403)
+
+    DB.update_order_status(order_id, status, cancel_reason)
+    return ok()
+
+@app.get("/api/orders/<telegram_id>")
+def orders_user(telegram_id):
+    items = DB.list_orders_for_user(str(telegram_id))
+    return ok({"items": items})
+
+# =========================
+# CHAT HISTORY (REST, WS realtime separate)
+# =========================
+@app.post("/api/messages/save")
+def msg_save():
+    data = request.json or {}
+    chat_id = str(data.get("chat_id","")).strip()
+    from_tid = str(data.get("from_telegram_id","")).strip()
+    to_tid = str(data.get("to_telegram_id","")).strip()
+    text = str(data.get("text","")).strip()
+    voice_url = str(data.get("voice_url","")).strip()
+
+    if not chat_id or not from_tid or not to_tid:
+        return err("chat_id/from_telegram_id/to_telegram_id required")
+
+    mid = DB.save_message(chat_id, from_tid, to_tid, text, voice_url)
+    return ok({"message_id": mid})
+
+@app.get("/api/messages/<chat_id>")
+def msg_list(chat_id):
+    limit = int(request.args.get("limit") or 200)
+    items = DB.get_chat_messages(str(chat_id), limit)
+    return ok({"items": items})
+
+# =========================
+# BOOT
+# =========================
+@app.before_request
+def _boot_once():
+    # initialize db lazily
+    if not getattr(app, "_db_inited", False):
+        DB.init_db()
+        app._db_inited = True
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8080"))
-    app.run(host="0.0.0.0", port=port)
+    DB.init_db()
+    app.run(host="0.0.0.0", port=10000)
