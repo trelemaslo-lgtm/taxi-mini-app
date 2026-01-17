@@ -132,7 +132,9 @@ def api_ads_create():
     try:
         payload = request.json or {}
 
-        # basic validation
+        # debug log
+        print("📩 /api/ads payload:", payload)
+
         if not payload.get("from") or not payload.get("to") or not payload.get("price"):
             return err("missing fields", 400)
 
@@ -143,7 +145,9 @@ def api_ads_create():
         return ok({"saved": True})
 
     except Exception as e:
+        print("❌ /api/ads ERROR:", str(e))
         return err("publish error", 500)
+
 
 # ===== PROFILE =====
 @app.route("/api/profile/save", methods=["POST"])
