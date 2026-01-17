@@ -1,650 +1,786 @@
+import os
 import sqlite3
-from pathlib import Path
 import time
-from typing import Optional, List, Dict, Any, Tuple
+import json
+import hashlib
+from typing import Any, Dict, List, Optional, Tuple
 
-DB_PATH = Path(__file__).parent / "taxi.db"
+# =========================================================
+# 711 TAXI — ULTRA FINAL DB CORE (SUPER BIG)
+# - SQLite production pragmas
+# - Full schema for FINAL PACK
+# - Helpers + migrations + analytics
+# =========================================================
 
+DB_PATH = os.getenv("DB_PATH", "taxi.db").strip()
 
-# =========================
-# DB CORE
-# =========================
-def now_ts() -> int:
+# =========================================================
+# TIME
+# =========================================================
+def now_ms() -> int:
+    return int(time.time() * 1000)
+
+def now_s() -> int:
     return int(time.time())
 
+def ms_to_s(ms: int) -> int:
+    return int(ms / 1000)
 
-def conn():
-    c = sqlite3.connect(DB_PATH)
-    c.row_factory = sqlite3.Row
-    return c
+# =========================================================
+# CONNECTION
+# =========================================================
+def get_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
 
+    # render friendly pragmas
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA temp_store=MEMORY;")
+        conn.execute("PRAGMA foreign_keys=ON;")
+        conn.execute("PRAGMA busy_timeout=6000;")
+        conn.execute("PRAGMA cache_size=-8000;")  # ~8MB
+    except:
+        pass
 
-def q1(sql: str, args: tuple = ()):
-    with conn() as db:
-        r = db.execute(sql, args).fetchone()
-        return dict(r) if r else None
+    return conn
 
+def row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
+    if not row:
+        return {}
+    return {k: row[k] for k in row.keys()}
 
-def qall(sql: str, args: tuple = ()):
-    with conn() as db:
-        rows = db.execute(sql, args).fetchall()
-        return [dict(r) for r in rows]
+def rows_to_list(rows: List[sqlite3.Row]) -> List[Dict[str, Any]]:
+    return [row_to_dict(r) for r in rows]
 
+# =========================================================
+# BASIC EXEC HELPERS
+# =========================================================
+def db_execute(sql: str, params: Tuple[Any, ...] = ()) -> None:
+    conn = get_conn()
+    try:
+        conn.execute(sql, params)
+        conn.commit()
+    finally:
+        conn.close()
 
-def exec1(sql: str, args: tuple = ()) -> int:
-    with conn() as db:
-        cur = db.execute(sql, args)
-        db.commit()
-        return cur.lastrowid
+def db_exec_many(sql: str, rows: List[Tuple[Any, ...]]) -> None:
+    conn = get_conn()
+    try:
+        conn.executemany(sql, rows)
+        conn.commit()
+    finally:
+        conn.close()
 
+def db_fetchone(sql: str, params: Tuple[Any, ...] = ()) -> Optional[Dict[str, Any]]:
+    conn = get_conn()
+    try:
+        cur = conn.execute(sql, params)
+        row = cur.fetchone()
+        if not row:
+            return None
+        return row_to_dict(row)
+    finally:
+        conn.close()
 
-def exec_many(sql: str, items: List[tuple]):
-    with conn() as db:
-        db.executemany(sql, items)
-        db.commit()
+def db_fetchall(sql: str, params: Tuple[Any, ...] = ()) -> List[Dict[str, Any]]:
+    conn = get_conn()
+    try:
+        cur = conn.execute(sql, params)
+        rows = cur.fetchall()
+        return rows_to_list(rows)
+    finally:
+        conn.close()
 
+def db_scalar(sql: str, params: Tuple[Any, ...] = (), default: Any = 0) -> Any:
+    conn = get_conn()
+    try:
+        cur = conn.execute(sql, params)
+        row = cur.fetchone()
+        if not row:
+            return default
+        return list(row)[0]
+    finally:
+        conn.close()
 
-# =========================
-# INIT SCHEMA (ULTRA)
-# =========================
-def init_db():
-    with conn() as db:
-        # ---- USERS / PROFILES ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS users(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          telegram_id TEXT UNIQUE,
-          role TEXT,
-          name TEXT,
-          phone TEXT,
-          username TEXT,
-          bio TEXT,
-          photo_url TEXT,
-          cover_url TEXT,
-          city TEXT,
-          is_verified INTEGER DEFAULT 0,
-          trust_score REAL DEFAULT 0,
-          level INTEGER DEFAULT 1,
-          points INTEGER DEFAULT 0,
-          created_at INTEGER
-        )
-        """)
+# =========================================================
+# UTILS
+# =========================================================
+def stable_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-        # car gallery (profile only)
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS car_photos(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          telegram_id TEXT,
-          image_url TEXT,
-          created_at INTEGER
-        )
-        """)
+def json_dumps(obj: Any) -> str:
+    try:
+        return json.dumps(obj, ensure_ascii=False)
+    except:
+        return "{}"
 
-        # ---- ADS ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS ads(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          telegram_id TEXT,
-          role TEXT,
-          name TEXT,
-          phone TEXT,
-          car_brand TEXT,
-          car_number TEXT,
-          photo_url TEXT,
+def json_loads(text: str) -> Any:
+    try:
+        return json.loads(text or "{}")
+    except:
+        return {}
 
-          frm TEXT,
-          too TEXT,
-          ad_type TEXT,
-          price TEXT,
-          seats INTEGER,
-          comment TEXT,
+def table_exists(name: str) -> bool:
+    conn = get_conn()
+    try:
+        r = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (name,)
+        ).fetchone()
+        return r is not None
+    finally:
+        conn.close()
 
-          lat REAL,
-          lng REAL,
+def column_exists(table: str, column: str) -> bool:
+    conn = get_conn()
+    try:
+        cur = conn.execute(f"PRAGMA table_info({table});")
+        cols = [x["name"] for x in cur.fetchall()]
+        return column in cols
+    finally:
+        conn.close()
 
-          is_vip INTEGER DEFAULT 0,
-          is_pinned INTEGER DEFAULT 0,
+# =========================================================
+# MIGRATIONS
+# =========================================================
+def ensure_migrations_table(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS migrations(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL
+    );
+    """)
 
-          status TEXT DEFAULT 'active', -- active/closed/full
+def has_migration(conn: sqlite3.Connection, key: str) -> bool:
+    r = conn.execute("SELECT id FROM migrations WHERE key=?", (key,)).fetchone()
+    return r is not None
 
-          created_at INTEGER,
-          updated_at INTEGER
-        )
-        """)
+def add_migration(conn: sqlite3.Connection, key: str) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations(key, created_at) VALUES(?,?)",
+        (key, now_ms())
+    )
 
-        # ---- FAVORITES ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS favorites(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          telegram_id TEXT,
-          target_telegram_id TEXT,
-          created_at INTEGER,
-          UNIQUE(telegram_id, target_telegram_id)
-        )
-        """)
-
-        # ---- LIKES / POINTS ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS likes(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          target_phone TEXT,
-          from_telegram_id TEXT,
-          created_at INTEGER,
-          UNIQUE(target_phone, from_telegram_id)
-        )
-        """)
-
-        # ---- AD VIEWS ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS ad_views(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ad_id INTEGER,
-          viewer_telegram_id TEXT,
-          created_at INTEGER,
-          UNIQUE(ad_id, viewer_telegram_id)
-        )
-        """)
-
-        # ---- RATINGS & REVIEWS ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS reviews(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          target_telegram_id TEXT,
-          from_telegram_id TEXT,
-          rating INTEGER,
-          text TEXT,
-          created_at INTEGER
-        )
-        """)
-
-        # ---- REPORTS / COMPLAINTS ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS reports(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          target_telegram_id TEXT,
-          from_telegram_id TEXT,
-          reason TEXT,
-          text TEXT,
-          status TEXT DEFAULT 'open', -- open/closed
-          created_at INTEGER
-        )
-        """)
-
-        # ---- NEWS POSTS (ADMIN) ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS news(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT,
-          text TEXT,
-          image_url TEXT,
-          created_at INTEGER
-        )
-        """)
-
-        # ---- ADMIN BANNER ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS admin_banner(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          image_url TEXT,
-          created_at INTEGER
-        )
-        """)
-
-        # ---- DONATIONS ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS donations(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          telegram_id TEXT,
-          amount INTEGER,
-          method TEXT,
-          created_at INTEGER
-        )
-        """)
-
-        # ---- ORDERS SYSTEM ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS orders(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          client_telegram_id TEXT,
-          driver_telegram_id TEXT,
-          ad_id INTEGER,
-          status TEXT DEFAULT 'created', -- created/driver_done/client_arrived/admin_confirmed/cancelled
-          cancel_reason TEXT,
-          created_at INTEGER,
-          updated_at INTEGER
-        )
-        """)
-
-        # ---- CHAT MESSAGES ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS messages(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          chat_id TEXT,
-          from_telegram_id TEXT,
-          to_telegram_id TEXT,
-          text TEXT,
-          voice_url TEXT,
-          created_at INTEGER
-        )
-        """)
-
-        # ---- PRESENCE LOG ----
-        db.execute("""
-        CREATE TABLE IF NOT EXISTS presence_log(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          telegram_id TEXT,
-          status TEXT,
-          created_at INTEGER
-        )
-        """)
-
-        db.commit()
-
-
-# =========================
-# USERS
-# =========================
-def upsert_user(telegram_id: str, role: str, name: str, phone: str,
-                username: str = "", bio: str = "", photo_url: str = "",
-                cover_url: str = "", city: str = ""):
-    sql = """
-    INSERT INTO users(telegram_id, role, name, phone, username, bio, photo_url, cover_url, city, created_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(telegram_id) DO UPDATE SET
-      role=excluded.role,
-      name=excluded.name,
-      phone=excluded.phone,
-      username=excluded.username,
-      bio=excluded.bio,
-      photo_url=excluded.photo_url,
-      cover_url=excluded.cover_url,
-      city=excluded.city
+# =========================================================
+# SCHEMA CREATION
+# =========================================================
+def init_db() -> None:
     """
-    exec1(sql, (telegram_id, role, name, phone, username, bio, photo_url, cover_url, city, now_ts()))
-
-
-def get_user(telegram_id: str) -> Optional[Dict[str, Any]]:
-    return q1("SELECT * FROM users WHERE telegram_id=?", (telegram_id,))
-
-
-def list_users(role: str = "", q: str = "") -> List[Dict[str, Any]]:
-    q = (q or "").strip().lower()
-    args = []
-    where = []
-
-    sql = "SELECT * FROM users"
-    if role:
-        where.append("role=?")
-        args.append(role)
-
-    if q:
-        where.append("(lower(name) LIKE ? OR lower(phone) LIKE ? OR lower(username) LIKE ?)")
-        like = f"%{q}%"
-        args += [like, like, like]
-
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-
-    sql += " ORDER BY created_at DESC"
-    return qall(sql, tuple(args))
-
-
-def set_verified(telegram_id: str, is_verified: int):
-    exec1("UPDATE users SET is_verified=? WHERE telegram_id=?", (is_verified, telegram_id))
-
-
-def update_points(telegram_id: str, points: int):
-    exec1("UPDATE users SET points=? WHERE telegram_id=?", (points, telegram_id))
-
-
-def update_level(telegram_id: str, level: int):
-    exec1("UPDATE users SET level=? WHERE telegram_id=?", (level, telegram_id))
-
-
-# =========================
-# CAR PHOTOS (Gallery)
-# =========================
-def add_car_photo(telegram_id: str, image_url: str):
-    exec1("INSERT INTO car_photos(telegram_id, image_url, created_at) VALUES(?,?,?)",
-          (telegram_id, image_url, now_ts()))
-
-
-def list_car_photos(telegram_id: str) -> List[Dict[str, Any]]:
-    return qall("SELECT * FROM car_photos WHERE telegram_id=? ORDER BY id DESC", (telegram_id,))
-
-
-def delete_car_photo(photo_id: int, telegram_id: str):
-    exec1("DELETE FROM car_photos WHERE id=? AND telegram_id=?", (photo_id, telegram_id))
-
-
-# =========================
-# ADS
-# =========================
-def create_ad(payload: Dict[str, Any]) -> int:
-    ts = now_ts()
-    return exec1("""
-    INSERT INTO ads(
-      telegram_id, role, name, phone, car_brand, car_number, photo_url,
-      frm, too, ad_type, price, seats, comment, lat, lng,
-      is_vip, is_pinned, status, created_at, updated_at
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (
-        payload.get("telegram_id",""),
-        payload.get("role",""),
-        payload.get("name",""),
-        payload.get("phone",""),
-        payload.get("car_brand",""),
-        payload.get("car_number",""),
-        payload.get("photo_url",""),
-
-        payload.get("from",""),
-        payload.get("to",""),
-        payload.get("type","now"),
-        str(payload.get("price","")),
-        int(payload.get("seats") or 0),
-        payload.get("comment",""),
-
-        payload.get("lat", None),
-        payload.get("lng", None),
-
-        int(payload.get("is_vip") or 0),
-        int(payload.get("is_pinned") or 0),
-        payload.get("status","active"),
-        ts, ts
-    ))
-
-
-def list_ads() -> List[Dict[str, Any]]:
-    return qall("SELECT * FROM ads ORDER BY created_at DESC")
-
-
-def get_ad(ad_id: int) -> Optional[Dict[str, Any]]:
-    return q1("SELECT * FROM ads WHERE id=?", (ad_id,))
-
-
-def delete_ad(ad_id: int):
-    exec1("DELETE FROM ads WHERE id=?", (ad_id,))
-
-
-def update_ad(ad_id: int, telegram_id: str, data: Dict[str, Any]):
-    ad = get_ad(ad_id)
-    if not ad:
-        return False
-    if str(ad["telegram_id"]) != str(telegram_id):
-        return False
-
-    # only allowed fields
-    fields = {
-        "frm": data.get("from", ad["frm"]),
-        "too": data.get("to", ad["too"]),
-        "ad_type": data.get("type", ad["ad_type"]),
-        "price": str(data.get("price", ad["price"])),
-        "seats": int(data.get("seats", ad["seats"]) or 0),
-        "comment": data.get("comment", ad["comment"]),
-        "lat": data.get("lat", ad["lat"]),
-        "lng": data.get("lng", ad["lng"]),
-        "status": data.get("status", ad["status"]),
-        "updated_at": now_ts()
-    }
-
-    exec1("""
-    UPDATE ads SET
-      frm=?, too=?, ad_type=?, price=?, seats=?, comment=?, lat=?, lng=?, status=?, updated_at=?
-    WHERE id=?
-    """, (
-        fields["frm"], fields["too"], fields["ad_type"],
-        fields["price"], fields["seats"], fields["comment"],
-        fields["lat"], fields["lng"], fields["status"], fields["updated_at"],
-        ad_id
-    ))
-    return True
-
-
-def change_ad_seats(ad_id: int, telegram_id: str, delta: int) -> Optional[int]:
-    ad = get_ad(ad_id)
-    if not ad:
-        return None
-    if str(ad["telegram_id"]) != str(telegram_id):
-        return None
-    seats = int(ad["seats"] or 0) + delta
-    if seats < 0:
-        seats = 0
-    if seats > 8:
-        seats = 8
-
-    status = "active"
-    if seats == 0:
-        status = "full"
-
-    exec1("UPDATE ads SET seats=?, status=?, updated_at=? WHERE id=?",
-          (seats, status, now_ts(), ad_id))
-    return seats
-
-
-def pin_ad(ad_id: int, is_pinned: int):
-    exec1("UPDATE ads SET is_pinned=?, updated_at=? WHERE id=?", (is_pinned, now_ts(), ad_id))
-
-
-def vip_ad(ad_id: int, is_vip: int):
-    exec1("UPDATE ads SET is_vip=?, updated_at=? WHERE id=?", (is_vip, now_ts(), ad_id))
-
-
-# =========================
-# LIKES / POINTS
-# =========================
-def like_phone(target_phone: str, from_tid: str) -> int:
+    ULTRA FINAL schema.
+    """
+    conn = get_conn()
     try:
-        exec1("INSERT INTO likes(target_phone, from_telegram_id, created_at) VALUES(?,?,?)",
-              (target_phone, from_tid, now_ts()))
+        ensure_migrations_table(conn)
+
+        # -------------------------------------------------
+        # ADS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS ads(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT NOT NULL,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+
+            car_brand TEXT DEFAULT '',
+            car_number TEXT DEFAULT '',
+            photo_url TEXT DEFAULT '',
+
+            from_place TEXT NOT NULL,
+            to_place TEXT NOT NULL,
+            ad_type TEXT DEFAULT 'now',
+
+            price TEXT NOT NULL,
+            seats INTEGER DEFAULT 0,
+            comment TEXT DEFAULT '',
+
+            lat REAL DEFAULT NULL,
+            lng REAL DEFAULT NULL,
+
+            vip INTEGER DEFAULT 0,
+            pinned INTEGER DEFAULT 0,
+            hidden INTEGER DEFAULT 0,
+
+            created_at INTEGER NOT NULL,
+            auto_delete_at INTEGER DEFAULT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ads_role ON ads(role);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ads_phone ON ads(phone);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ads_created ON ads(created_at);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ads_autodel ON ads(auto_delete_at);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ads_vip ON ads(vip);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ads_pinned ON ads(pinned);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ads_hidden ON ads(hidden);")
+
+        # -------------------------------------------------
+        # PROFILES
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS profiles(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT NOT NULL,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL UNIQUE,
+
+            bio TEXT DEFAULT '',
+
+            car_brand TEXT DEFAULT '',
+            car_number TEXT DEFAULT '',
+
+            photo_url TEXT DEFAULT '',
+            cover_url TEXT DEFAULT '',
+
+            verified INTEGER DEFAULT 0,
+            trusted_badge INTEGER DEFAULT 0,
+
+            trust_score INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 1,
+
+            orders_total INTEGER DEFAULT 0,
+            orders_done INTEGER DEFAULT 0,
+            cancel_count INTEGER DEFAULT 0,
+            report_count INTEGER DEFAULT 0,
+
+            telegram_id TEXT DEFAULT NULL,
+            telegram_username TEXT DEFAULT NULL,
+
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_profiles_updated ON profiles(updated_at);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_profiles_trust ON profiles(trust_score);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_profiles_level ON profiles(level);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_profiles_orders_done ON profiles(orders_done);")
+
+        # -------------------------------------------------
+        # LIKES / POINTS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS likes_points(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT NOT NULL UNIQUE,
+            likes INTEGER DEFAULT 0,
+            points INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_lp_phone ON likes_points(phone);")
+
+        # -------------------------------------------------
+        # AD VIEWS (unique per viewer w/ cooldown in app)
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS ad_views(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ad_id INTEGER NOT NULL,
+            viewer_phone TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(ad_id) REFERENCES ads(id) ON DELETE CASCADE
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_views_ad ON ad_views(ad_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_views_combo ON ad_views(ad_id, viewer_phone);")
+
+        # -------------------------------------------------
+        # FAVORITES
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS favorites(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_phone TEXT NOT NULL,
+            target_phone TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_fav_pair ON favorites(owner_phone, target_phone);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_fav_owner ON favorites(owner_phone);")
+
+        # -------------------------------------------------
+        # CAR GALLERY
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS car_gallery(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT NOT NULL,
+            image_url TEXT NOT NULL,
+            caption TEXT DEFAULT '',
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(phone) REFERENCES profiles(phone) ON DELETE CASCADE
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gallery_phone ON car_gallery(phone);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gallery_created ON car_gallery(created_at);")
+
+        # -------------------------------------------------
+        # NEWS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS news(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            text TEXT NOT NULL,
+            image_url TEXT DEFAULT '',
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_news_created ON news(created_at);")
+
+        # -------------------------------------------------
+        # BANNER (entry ad 3 sec)
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS banner(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            image_url TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_banner_created ON banner(created_at);")
+
+        # -------------------------------------------------
+        # COMPLAINTS / REPORTS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS complaints(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_phone TEXT NOT NULL,
+            target_phone TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            details TEXT DEFAULT '',
+            status TEXT DEFAULT 'open', -- open/closed/actioned
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_complaints_target ON complaints(target_phone);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_complaints_created ON complaints(created_at);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status);")
+
+        # -------------------------------------------------
+        # ORDERS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS orders(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_phone TEXT NOT NULL,
+            driver_phone TEXT NOT NULL,
+            ad_id INTEGER DEFAULT NULL,
+            note TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'created',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_client ON orders(client_phone);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_driver ON orders(driver_phone);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);")
+
+        # -------------------------------------------------
+        # REVIEWS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS reviews(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            client_phone TEXT NOT NULL,
+            driver_phone TEXT NOT NULL,
+            rating INTEGER NOT NULL,
+            text TEXT DEFAULT '',
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reviews_driver ON reviews(driver_phone);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reviews_order ON reviews(order_id);")
+
+        # -------------------------------------------------
+        # CHAT THREADS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS chat_threads(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_a TEXT NOT NULL,
+            user_b TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_thread_pair ON chat_threads(user_a, user_b);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_thread_updated ON chat_threads(updated_at);")
+
+        # -------------------------------------------------
+        # CHAT MESSAGES
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id INTEGER NOT NULL,
+            sender_phone TEXT NOT NULL,
+            text TEXT DEFAULT '',
+            media_url TEXT DEFAULT '',
+            media_type TEXT DEFAULT '',
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_msg_thread ON chat_messages(thread_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_msg_created ON chat_messages(created_at);")
+
+        # -------------------------------------------------
+        # PRESENCE
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS presence(
+            phone TEXT PRIMARY KEY,
+            is_online INTEGER DEFAULT 0,
+            last_seen INTEGER NOT NULL
+        );
+        """)
+
+        # -------------------------------------------------
+        # TYPING STATUS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS typing_status(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id INTEGER NOT NULL,
+            phone TEXT NOT NULL,
+            is_typing INTEGER DEFAULT 0,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY(thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_typing_thread ON typing_status(thread_id);")
+
+        # -------------------------------------------------
+        # UPLOADS LOG (device-only)
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS uploads(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_phone TEXT NOT NULL,
+            url TEXT NOT NULL,
+            file_type TEXT DEFAULT '', -- profile/cover/car/news/banner/voice
+            meta TEXT DEFAULT '',
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_upload_owner ON uploads(owner_phone);")
+
+        # -------------------------------------------------
+        # DONATIONS
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS donations(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT DEFAULT '',
+            telegram_id TEXT DEFAULT '',
+            amount INTEGER NOT NULL,
+            note TEXT DEFAULT '',
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_don_created ON donations(created_at);")
+
+        # -------------------------------------------------
+        # ROUTE SUBSCRIPTIONS (bot notify)
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS route_subs(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT NOT NULL,
+            from_place TEXT NOT NULL,
+            to_place TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_route_phone ON route_subs(phone);")
+
+        # -------------------------------------------------
+        # ADMIN LOGS (analytics)
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS admin_logs(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            meta TEXT DEFAULT '',
+            created_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_logs_created ON admin_logs(created_at);")
+
+        # -------------------------------------------------
+        # RATE LIMITS (anti spam)
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS rate_limits(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT NOT NULL UNIQUE,
+            count INTEGER DEFAULT 0,
+            window_start INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+
+        # -------------------------------------------------
+        # NOTIFICATION QUEUE (future)
+        # -------------------------------------------------
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS notify_queue(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            status TEXT DEFAULT 'pending', -- pending/sent/failed
+            tries INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notify_status ON notify_queue(status);")
+
+        conn.commit()
+
+        if not has_migration(conn, "ultra_init_v1"):
+            add_migration(conn, "ultra_init_v1")
+            conn.commit()
+
+    finally:
+        conn.close()
+
+
+# =========================================================
+# RATE LIMIT ENGINE (ANTI-SPAM)
+# =========================================================
+def rate_limit_hit(key: str, limit: int, window_seconds: int) -> bool:
+    """
+    Returns True if blocked (limit reached).
+    key: e.g. "publish:+99890..."
+    """
+    conn = get_conn()
+    try:
+        now = now_ms()
+        window_ms = window_seconds * 1000
+
+        row = conn.execute("SELECT * FROM rate_limits WHERE key=?", (key,)).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO rate_limits(key, count, window_start, updated_at) VALUES(?,?,?,?)",
+                (key, 1, now, now)
+            )
+            conn.commit()
+            return False
+
+        row = row_to_dict(row)
+        count = int(row.get("count", 0))
+        ws = int(row.get("window_start", now))
+
+        if now - ws > window_ms:
+            # reset window
+            conn.execute(
+                "UPDATE rate_limits SET count=?, window_start=?, updated_at=? WHERE key=?",
+                (1, now, now, key)
+            )
+            conn.commit()
+            return False
+
+        # within window
+        if count >= limit:
+            return True
+
+        conn.execute(
+            "UPDATE rate_limits SET count=?, updated_at=? WHERE key=?",
+            (count + 1, now, key)
+        )
+        conn.commit()
+        return False
+    finally:
+        conn.close()
+
+
+# =========================================================
+# ANALYTICS HELPERS
+# =========================================================
+def admin_log(telegram_id: str, action: str, meta: Optional[Dict[str, Any]] = None) -> None:
+    try:
+        db_execute(
+            "INSERT INTO admin_logs(telegram_id, action, meta, created_at) VALUES(?,?,?,?)",
+            (str(telegram_id), action, json_dumps(meta or {}), now_ms())
+        )
     except:
         pass
-    row = q1("SELECT COUNT(*) as c FROM likes WHERE target_phone=?", (target_phone,))
-    return int(row["c"]) if row else 0
 
 
-def points_for_phone(target_phone: str) -> int:
-    row = q1("SELECT COUNT(*) as c FROM likes WHERE target_phone=?", (target_phone,))
-    return int(row["c"]) if row else 0
+# =========================================================
+# CHAT HELPERS (threads/messages)
+# =========================================================
+def chat_get_thread(user_a: str, user_b: str) -> Optional[Dict[str, Any]]:
+    """
+    Always store pair sorted to keep unique.
+    """
+    a = str(user_a)
+    b = str(user_b)
+    if a > b:
+        a, b = b, a
+
+    return db_fetchone(
+        "SELECT * FROM chat_threads WHERE user_a=? AND user_b=?",
+        (a, b)
+    )
+
+def chat_ensure_thread(user_a: str, user_b: str) -> Dict[str, Any]:
+    a = str(user_a)
+    b = str(user_b)
+    if a > b:
+        a, b = b, a
+
+    t = chat_get_thread(a, b)
+    if t:
+        return t
+
+    ts = now_ms()
+    db_execute(
+        "INSERT INTO chat_threads(user_a, user_b, created_at, updated_at) VALUES(?,?,?,?)",
+        (a, b, ts, ts)
+    )
+    return chat_get_thread(a, b) or {"id": 0, "user_a": a, "user_b": b}
+
+def chat_add_message(thread_id: int, sender_phone: str, text: str = "", media_url: str = "", media_type: str = "") -> int:
+    ts = now_ms()
+    db_execute(
+        """
+        INSERT INTO chat_messages(thread_id, sender_phone, text, media_url, media_type, created_at)
+        VALUES(?,?,?,?,?,?)
+        """,
+        (thread_id, sender_phone, text, media_url, media_type, ts)
+    )
+    db_execute("UPDATE chat_threads SET updated_at=? WHERE id=?", (ts, thread_id))
+    last_id = db_scalar("SELECT last_insert_rowid();", (), 0)
+    return int(last_id or 0)
+
+def chat_list_threads(phone: str, limit: int = 50) -> List[Dict[str, Any]]:
+    return db_fetchall(
+        """
+        SELECT * FROM chat_threads
+        WHERE user_a=? OR user_b=?
+        ORDER BY updated_at DESC
+        LIMIT ?
+        """,
+        (phone, phone, limit)
+    )
+
+def chat_list_messages(thread_id: int, limit: int = 80) -> List[Dict[str, Any]]:
+    return db_fetchall(
+        """
+        SELECT * FROM chat_messages
+        WHERE thread_id=?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (thread_id, limit)
+    )[::-1]
 
 
-# =========================
-# VIEWS
-# =========================
-def add_view(ad_id: int, viewer_tid: str) -> int:
+# =========================================================
+# PRESENCE HELPERS
+# =========================================================
+def presence_set(phone: str, online: bool) -> None:
+    ts = now_ms()
+    ex = db_fetchone("SELECT phone FROM presence WHERE phone=?", (phone,))
+    if ex:
+        db_execute("UPDATE presence SET is_online=?, last_seen=? WHERE phone=?", (1 if online else 0, ts, phone))
+    else:
+        db_execute("INSERT INTO presence(phone, is_online, last_seen) VALUES(?,?,?)", (phone, 1 if online else 0, ts))
+
+def presence_get(phone: str) -> Dict[str, Any]:
+    r = db_fetchone("SELECT * FROM presence WHERE phone=?", (phone,))
+    return r or {"phone": phone, "is_online": 0, "last_seen": 0}
+
+
+# =========================================================
+# CLEANUP JOBS
+# =========================================================
+def cleanup_old_ads(auto_delete_before_ms: int) -> int:
+    """
+    Delete ads with auto_delete_at <= given ms.
+    Return deleted count.
+    """
+    conn = get_conn()
     try:
-        exec1("INSERT INTO ad_views(ad_id, viewer_telegram_id, created_at) VALUES(?,?,?)",
-              (ad_id, viewer_tid, now_ts()))
-    except:
-        pass
-    row = q1("SELECT COUNT(*) as c FROM ad_views WHERE ad_id=?", (ad_id,))
-    return int(row["c"]) if row else 0
+        cur = conn.execute("SELECT COUNT(*) FROM ads WHERE auto_delete_at IS NOT NULL AND auto_delete_at <= ?", (auto_delete_before_ms,))
+        count = int(cur.fetchone()[0])
+        conn.execute("DELETE FROM ads WHERE auto_delete_at IS NOT NULL AND auto_delete_at <= ?", (auto_delete_before_ms,))
+        conn.commit()
+        return count
+    finally:
+        conn.close()
+
+def cleanup_typing_stale(stale_ms: int = 8000) -> None:
+    """
+    Clear typing flags older than stale_ms.
+    """
+    ts = now_ms() - stale_ms
+    db_execute("UPDATE typing_status SET is_typing=0 WHERE updated_at < ?", (ts,))
+
+def cleanup_presence_offline(stale_ms: int = 60000) -> None:
+    """
+    Mark offline if last_seen older than stale_ms.
+    """
+    ts = now_ms() - stale_ms
+    db_execute("UPDATE presence SET is_online=0 WHERE last_seen < ?", (ts,))
 
 
-def views_for_ad(ad_id: int) -> int:
-    row = q1("SELECT COUNT(*) as c FROM ad_views WHERE ad_id=?", (ad_id,))
-    return int(row["c"]) if row else 0
+# =========================================================
+# SEED DATA (optional for test)
+# =========================================================
+def seed_demo_data() -> None:
+    """
+    Optional: for local test only. NOT required.
+    """
+    if db_scalar("SELECT COUNT(*) FROM profiles", (), 0) > 0:
+        return
 
-
-# =========================
-# FAVORITES
-# =========================
-def add_favorite(telegram_id: str, target_tid: str) -> bool:
+    t = now_ms()
+    demo_profiles = [
+        ("driver", "Temur Qodirov", "+998901111111", "Premium driver", "Chevrolet", "01A777AA", "", "", 1, 1, 92, 5, 24, 20, 1, 0, "111", "temur", t, t),
+        ("driver", "Akmal Aliyev", "+998902222222", "Fast ride", "Cobalt", "01B555BB", "", "", 0, 0, 55, 3, 10, 8, 2, 1, None, None, t, t),
+        ("client", "Sardor", "+998903333333", "Client", "", "", "", "", 0, 0, 0, 1, 0, 0, 0, 0, None, None, t, t),
+    ]
+    conn = get_conn()
     try:
-        exec1("INSERT INTO favorites(telegram_id, target_telegram_id, created_at) VALUES(?,?,?)",
-              (telegram_id, target_tid, now_ts()))
-        return True
-    except:
-        return False
+        conn.executemany("""
+        INSERT INTO profiles(
+          role,name,phone,bio,car_brand,car_number,photo_url,cover_url,
+          verified,trusted_badge,trust_score,level,
+          orders_total,orders_done,cancel_count,report_count,
+          telegram_id,telegram_username,created_at,updated_at
+        )
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, demo_profiles)
 
+        demo_ads = [
+            ("driver","Temur Qodirov","+998901111111","Chevrolet","01A777AA","","Chirchiq","Sergeli","now","10000",3,"Tez ketaman",None,None,1,1,0,t,t+3600*1000,t),
+            ("driver","Akmal Aliyev","+998902222222","Cobalt","01B555BB","","Yunusobod","Chorsu","20","15000",2,"Komfort",None,None,0,0,0,t,t+3600*1000,t),
+            ("client","Sardor","+998903333333","","","","Sergeli","Chirchiq","fill","12000",1,"Joy bor",None,None,0,0,0,t,t+3600*1000,t),
+        ]
 
-def remove_favorite(telegram_id: str, target_tid: str):
-    exec1("DELETE FROM favorites WHERE telegram_id=? AND target_telegram_id=?", (telegram_id, target_tid))
+        conn.executemany("""
+        INSERT INTO ads(
+          role,name,phone,car_brand,car_number,photo_url,
+          from_place,to_place,ad_type,price,seats,comment,
+          lat,lng,vip,pinned,hidden,created_at,auto_delete_at,updated_at
+        )
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, demo_ads)
 
-
-def list_favorites(telegram_id: str) -> List[Dict[str, Any]]:
-    return qall("""
-      SELECT u.* FROM favorites f
-      JOIN users u ON u.telegram_id=f.target_telegram_id
-      WHERE f.telegram_id=?
-      ORDER BY f.created_at DESC
-    """, (telegram_id,))
-
-
-# =========================
-# REVIEWS / RATINGS
-# =========================
-def add_review(target_tid: str, from_tid: str, rating: int, text: str = ""):
-    if rating < 1: rating = 1
-    if rating > 5: rating = 5
-    exec1("INSERT INTO reviews(target_telegram_id, from_telegram_id, rating, text, created_at) VALUES(?,?,?,?,?)",
-          (target_tid, from_tid, rating, text, now_ts()))
-
-
-def list_reviews(target_tid: str) -> List[Dict[str, Any]]:
-    return qall("SELECT * FROM reviews WHERE target_telegram_id=? ORDER BY id DESC", (target_tid,))
-
-
-def calc_rating(target_tid: str) -> float:
-    row = q1("SELECT AVG(rating) as avg FROM reviews WHERE target_telegram_id=?", (target_tid,))
-    avg = row["avg"] if row and row["avg"] is not None else 0
-    return float(avg)
-
-
-def top_drivers(limit: int = 20) -> List[Dict[str, Any]]:
-    return qall("""
-      SELECT u.*, 
-        (SELECT AVG(rating) FROM reviews r WHERE r.target_telegram_id=u.telegram_id) as avg_rating
-      FROM users u
-      WHERE u.role='driver'
-      ORDER BY avg_rating DESC NULLS LAST, u.points DESC
-      LIMIT ?
-    """, (limit,))
-
-
-# =========================
-# REPORTS
-# =========================
-def add_report(target_tid: str, from_tid: str, reason: str, text: str = ""):
-    exec1("INSERT INTO reports(target_telegram_id, from_telegram_id, reason, text, status, created_at) VALUES(?,?,?,?,?,?)",
-          (target_tid, from_tid, reason, text, "open", now_ts()))
-
-
-def list_reports(status: str = "open") -> List[Dict[str, Any]]:
-    return qall("SELECT * FROM reports WHERE status=? ORDER BY id DESC", (status,))
-
-
-def close_report(report_id: int):
-    exec1("UPDATE reports SET status='closed' WHERE id=?", (report_id,))
-
-
-# =========================
-# NEWS
-# =========================
-def create_news(title: str, text: str, image_url: str = "") -> int:
-    return exec1("INSERT INTO news(title, text, image_url, created_at) VALUES(?,?,?,?)",
-                 (title, text, image_url, now_ts()))
-
-
-def list_news(limit: int = 50) -> List[Dict[str, Any]]:
-    return qall("SELECT * FROM news ORDER BY id DESC LIMIT ?", (limit,))
-
-
-def delete_news(news_id: int):
-    exec1("DELETE FROM news WHERE id=?", (news_id,))
-
-
-# =========================
-# ADMIN BANNER
-# =========================
-def set_banner(image_url: str):
-    exec1("INSERT INTO admin_banner(image_url, created_at) VALUES(?,?)", (image_url, now_ts()))
-
-
-def get_banner() -> Optional[Dict[str, Any]]:
-    return q1("SELECT * FROM admin_banner ORDER BY id DESC LIMIT 1")
-
-
-# =========================
-# DONATIONS
-# =========================
-def add_donation(telegram_id: str, amount: int, method: str = "manual"):
-    if amount < 0: amount = 0
-    exec1("INSERT INTO donations(telegram_id, amount, method, created_at) VALUES(?,?,?,?)",
-          (telegram_id, amount, method, now_ts()))
-
-
-def top_donaters(limit: int = 10) -> List[Dict[str, Any]]:
-    return qall("""
-      SELECT telegram_id, SUM(amount) as total
-      FROM donations
-      GROUP BY telegram_id
-      ORDER BY total DESC
-      LIMIT ?
-    """, (limit,))
-
-
-def donation_stats() -> Dict[str, Any]:
-    row = q1("SELECT COUNT(*) as cnt, SUM(amount) as sum FROM donations")
-    return {
-        "count": int(row["cnt"] if row else 0),
-        "sum": int(row["sum"] if row and row["sum"] is not None else 0)
-    }
-
-
-# =========================
-# ORDERS
-# =========================
-def create_order(client_tid: str, driver_tid: str, ad_id: int) -> int:
-    ts = now_ts()
-    return exec1("""
-      INSERT INTO orders(client_telegram_id, driver_telegram_id, ad_id, status, created_at, updated_at)
-      VALUES(?,?,?,?,?,?)
-    """, (client_tid, driver_tid, ad_id, "created", ts, ts))
-
-
-def update_order_status(order_id: int, status: str, cancel_reason: str = ""):
-    exec1("UPDATE orders SET status=?, cancel_reason=?, updated_at=? WHERE id=?",
-          (status, cancel_reason, now_ts(), order_id))
-
-
-def list_orders_for_user(telegram_id: str) -> List[Dict[str, Any]]:
-    return qall("""
-      SELECT * FROM orders
-      WHERE client_telegram_id=? OR driver_telegram_id=?
-      ORDER BY id DESC
-    """, (telegram_id, telegram_id))
-
-
-# =========================
-# MESSAGES (CHAT HISTORY)
-# =========================
-def save_message(chat_id: str, from_tid: str, to_tid: str, text: str = "", voice_url: str = "") -> int:
-    return exec1("""
-      INSERT INTO messages(chat_id, from_telegram_id, to_telegram_id, text, voice_url, created_at)
-      VALUES(?,?,?,?,?,?)
-    """, (chat_id, from_tid, to_tid, text, voice_url, now_ts()))
-
-
-def get_chat_messages(chat_id: str, limit: int = 200) -> List[Dict[str, Any]]:
-    return qall("""
-      SELECT * FROM messages
-      WHERE chat_id=?
-      ORDER BY id DESC
-      LIMIT ?
-    """, (chat_id, limit))
-
-
-# =========================
-# PRESENCE LOG
-# =========================
-def log_presence(telegram_id: str, status: str):
-    exec1("INSERT INTO presence_log(telegram_id, status, created_at) VALUES(?,?,?)",
-          (telegram_id, status, now_ts()))
-
-
-def last_presence(telegram_id: str) -> Optional[Dict[str, Any]]:
-    return q1("""
-      SELECT * FROM presence_log
-      WHERE telegram_id=?
-      ORDER BY id DESC LIMIT 1
-    """, (telegram_id,))
+        conn.commit()
+    finally:
+        conn.close()
