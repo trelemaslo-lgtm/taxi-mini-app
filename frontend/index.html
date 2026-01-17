@@ -6,11 +6,6 @@
   <title>Ingichka Taksi</title>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Leaflet Map -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
   <link rel="stylesheet" href="./style.css" />
 </head>
 
@@ -22,7 +17,7 @@
 
   <!-- LOADING -->
   <div id="loading" class="loading active">
-    <div class="loading-card glass-soft">
+    <div class="loading-card">
       <div class="taxi-road">
         <div class="taxi-car"></div>
       </div>
@@ -38,9 +33,16 @@
     <header class="topbar">
       <div class="brand">
         <div class="brand-icon">🚕</div>
-        <div class="brand-title">Ingichka Taksi</div>
+        <div>
+          <div class="brand-title">Ingichka Taksi</div>
+          <div class="brand-sub">MiniApp • 711 GROUP</div>
+        </div>
       </div>
-      <button class="icon-btn" onclick="openSheet('settingsSheet')" aria-label="Settings">⚙️</button>
+
+      <div class="topbar-right">
+        <div id="wsStatus" class="ws-badge">⚫ WS Offline</div>
+        <button class="icon-btn" onclick="openSheet('settingsSheet')" aria-label="Settings">⚙️</button>
+      </div>
     </header>
 
     <!-- SCREENS -->
@@ -54,7 +56,7 @@
           <div class="stack">
             <button class="btn primary" onclick="setLang('uz')">O‘zbek</button>
             <button class="btn" onclick="setLang('ru')">Русский</button>
-            <button class="btn" onclick="setLang('uzk')">Ўзбекча</button>
+            <button class="btn" onclick="setLang('uzk')">Ўzbekcha</button>
           </div>
 
           <p class="muted" data-i18n="lang_hint">
@@ -69,11 +71,17 @@
           <h1 class="title" data-i18n="choose_role">Rolin tanlang</h1>
 
           <div class="stack">
-            <button class="btn primary" onclick="selectRole('driver')">🚘 <span data-i18n="role_driver">Haydovchi</span></button>
-            <button class="btn" onclick="selectRole('client')">👤 <span data-i18n="role_client">Mijoz</span></button>
+            <button class="btn primary" onclick="selectRole('driver')">
+              🚘 <span data-i18n="role_driver">Haydovchi</span>
+            </button>
+            <button class="btn" onclick="selectRole('client')">
+              👤 <span data-i18n="role_client">Mijoz</span>
+            </button>
           </div>
 
-          <button class="link" onclick="goBackTo('screen-language')">← <span data-i18n="back">Orqaga</span></button>
+          <button class="link" onclick="goBackTo('screen-language')">
+            ← <span data-i18n="back">Orqaga</span>
+          </button>
         </div>
       </section>
 
@@ -93,13 +101,6 @@
               <input id="p-phone" placeholder="+998..." inputmode="tel" />
             </label>
 
-            <button class="btn" style="margin-top:6px;" onclick="requestContact()">
-              📲 Telefonni Telegramdan olish
-            </button>
-            <div class="muted small" id="contactHint" style="margin-top:6px; display:none;">
-              ✅ Telefon avtomatik to‘ldirildi
-            </div>
-
             <div id="driver-extra" class="driver-extra">
               <label class="field">
                 <span data-i18n="car_brand">Mashina markasi</span>
@@ -113,27 +114,26 @@
             </div>
 
             <label class="field">
-              <span data-i18n="photo_url">Foto (URL)</span>
-              <input id="p-photo" placeholder="https://..." />
-            </label>
-
-            <label class="field">
               <span data-i18n="about_short">Qisqa info</span>
               <input id="p-bio" placeholder="..." />
             </label>
           </div>
 
           <div class="row">
-            <button class="btn primary full" onclick="saveProfile()" data-i18n="continue">Davom etish</button>
+            <button class="btn primary full" onclick="saveProfile()" data-i18n="continue">
+              Davom etish
+            </button>
           </div>
 
           <div class="row">
-            <button class="link" onclick="goBackTo('screen-role')">← <span data-i18n="back">Orqaga</span></button>
+            <button class="link" onclick="goBackTo('screen-role')">
+              ← <span data-i18n="back">Orqaga</span>
+            </button>
           </div>
         </div>
       </section>
 
-      <!-- SCREEN: HOME -->
+      <!-- SCREEN: HOME / FEED -->
       <section id="screen-home" class="screen">
         <div class="tabs glass">
           <button id="tabDrivers" class="tab active" onclick="switchFeed('drivers')">
@@ -144,6 +144,12 @@
           </button>
         </div>
 
+        <!-- SEARCH -->
+        <div class="glass search-box">
+          <input id="searchInput" class="search-input" placeholder="🔎 Search driver / route / phone..."
+                 oninput="searchAds()" />
+        </div>
+
         <div class="feed-header glass">
           <div class="feed-left">
             <div class="mini" id="geoLine">📍 <span data-i18n="geo_off">Geolokatsiya: OFF</span></div>
@@ -152,14 +158,7 @@
           <div class="feed-right">
             <button class="chip" onclick="toggleSort()"><span data-i18n="sort">Saralash</span></button>
             <button class="chip" onclick="openSheet('geoSheet')">📍 <span data-i18n="geo">Geo</span></button>
-            <button class="chip" onclick="openFullMap()">🗺 Full Map</button>
           </div>
-        </div>
-
-        <!-- SEARCH + FILTER -->
-        <div class="searchbar glass">
-          <input id="qInput" class="search-input" placeholder="🔍 Search driver / route..." oninput="applySearch()" />
-          <button class="chip" onclick="openSheet('filterSheet')">⚡ Filter</button>
         </div>
 
         <div id="cards" class="cards">
@@ -169,11 +168,23 @@
         </div>
       </section>
 
-      <!-- SCREEN: PROFILE VIEW -->
+      <!-- SCREEN: PROFILE VIEW (ULTRA) -->
       <section id="screen-profile-view" class="screen">
-        <div class="profile glass">
-          <div class="profile-top">
-            <div class="avatar" id="avatar"></div>
+        <div class="profile-ultra glass">
+
+          <!-- COVER -->
+          <div class="profile-cover" id="profileCoverImg">
+            <div class="cover-glow"></div>
+            <button class="cover-btn" onclick="uploadCoverPhoto()">🖼 Cover</button>
+          </div>
+
+          <!-- TOP -->
+          <div class="profile-top-ultra">
+            <div class="avatar-ultra-wrap">
+              <div class="avatar-ultra" id="avatar"></div>
+              <button class="avatar-btn" onclick="uploadProfilePhoto()">📷</button>
+            </div>
+
             <div class="profile-info">
               <div class="p-name" id="pv-name">—</div>
               <div class="p-sub" id="pv-phone">—</div>
@@ -181,6 +192,7 @@
             </div>
           </div>
 
+          <!-- STATS -->
           <div class="profile-stats">
             <div class="stat glass-soft">
               <div class="stat-label" data-i18n="rating">Reyting</div>
@@ -192,72 +204,41 @@
             </div>
           </div>
 
+          <!-- ACTIONS -->
           <div class="profile-actions">
-            <button class="btn" onclick="openSheet('editProfileSheet')" data-i18n="edit_profile">Profilni tahrirlash</button>
-            <button class="btn" onclick="openSheet('myAdsSheet')" data-i18n="my_ads">Mening e’lonlarim</button>
-            <button class="btn" onclick="openSheet('ordersSheet'); loadMyOrders();">🧾 Order history</button>
+            <button class="btn" onclick="openSheet('editProfileSheet')" data-i18n="edit_profile">
+              Profilni tahrirlash
+            </button>
+
+            <button class="btn" onclick="openSheet('myAdsSheet')" data-i18n="my_ads">
+              Mening e’lonlarim
+            </button>
           </div>
+
+          <!-- CAR GALLERY -->
+          <div class="gallery-head">
+            <div class="gallery-title">🚘 Car Gallery</div>
+            <button class="chip" onclick="addCarPhoto()">＋ Add Photo</button>
+          </div>
+          <div id="carGallery" class="car-gallery-box">
+            <div class="muted small">Car photos yo‘q</div>
+          </div>
+
         </div>
       </section>
 
       <!-- SCREEN: ADMIN -->
       <section id="screen-admin" class="screen">
         <div class="sheet glass">
-          <h2 class="sheet-title">🛡 Admin Panel</h2>
-          <p class="muted">711 GROUP control center</p>
+          <h2 class="sheet-title">🛡 Admin Ultra</h2>
+          <p class="muted">Sizning panel: banner / news / statistika</p>
 
           <div class="admin-grid">
-            <button class="btn" onclick="adminRefresh()">📊 Stats</button>
-            <button class="btn" onclick="adminLoadProfiles()">👥 Users</button>
-            <button class="btn danger" onclick="adminClearAds()">🗑 Cleanup</button>
+            <button class="btn" onclick="adminUploadBanner()">📢 Banner Upload (device)</button>
+            <button class="btn" onclick="openSheet('newsSheet')">📰 News Panel</button>
           </div>
 
           <div class="mini muted" id="adminStats">—</div>
-
-          <div id="adminUsers" class="cards" style="margin-top:12px;"></div>
-
-          <div class="sheet glass" style="margin-top:12px;">
-            <h3 style="margin:0 0 10px;">📣 Banner</h3>
-
-            <div class="form-grid compact">
-              <label class="field">
-                <span>Title</span>
-                <input id="banTitle" placeholder="Promo title..." />
-              </label>
-
-              <label class="field">
-                <span>Text</span>
-                <input id="banText" placeholder="Promo text..." />
-              </label>
-
-              <label class="field">
-                <span>Image URL</span>
-                <input id="banImage" placeholder="https://..." />
-              </label>
-
-              <label class="field">
-                <span>Link (optional)</span>
-                <input id="banLink" placeholder="https://..." />
-              </label>
-
-              <div class="row2">
-                <button class="btn primary" onclick="adminSetBanner()">✅ Publish</button>
-                <button class="btn danger" onclick="adminBannerOff()">🛑 OFF</button>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- SCREEN: FULLSCREEN MAP -->
-      <section id="screen-map-full" class="screen">
-        <div class="map-full-wrap">
-          <div class="map-full-top glass">
-            <div class="sheet-head-title">🗺 Map</div>
-            <button class="icon-btn" onclick="closeFullMap()">✕</button>
-          </div>
-          <div id="mapFullBox" class="map-full-box"></div>
         </div>
       </section>
 
@@ -288,7 +269,9 @@
 
   </div>
 
-  <!-- ======= BOTTOM SHEETS ======= -->
+  <!-- =========================
+       BOTTOM SHEETS
+  ========================== -->
 
   <!-- CREATE AD SHEET -->
   <div id="createAdSheet" class="sheet-wrap" onclick="sheetOutside(event,'createAdSheet')">
@@ -356,6 +339,7 @@
       </div>
 
       <div class="settings-list">
+
         <button class="setting-item" onclick="openSheet('langSheet')">
           🌐 <span data-i18n="language">Til</span>
           <span class="right" id="langBadge">uz</span>
@@ -369,6 +353,21 @@
           </label>
         </div>
 
+        <button class="setting-item" onclick="openChatList()">
+          💬 Chat
+          <span class="right">→</span>
+        </button>
+
+        <button class="setting-item" onclick="openProfiles()">
+          👥 Profiles
+          <span class="right">→</span>
+        </button>
+
+        <button class="setting-item" onclick="openNews()">
+          📰 News
+          <span class="right">→</span>
+        </button>
+
         <button class="setting-item" onclick="openSheet('donateSheet')">
           💛 <span data-i18n="donate">Donat</span>
           <span class="right">711</span>
@@ -377,11 +376,6 @@
         <button class="setting-item" onclick="openSheet('aboutSheet')">
           ✨ <span data-i18n="about">Biz haqimizda</span>
           <span class="right">i</span>
-        </button>
-
-        <button class="setting-item" onclick="openSheet('topDriversSheet'); loadTopDrivers();">
-          🏆 <span>Top Drivers</span>
-          <span class="right">→</span>
         </button>
 
         <button class="setting-item admin-only" onclick="nav('admin')">
@@ -429,7 +423,9 @@
 
       <div class="mini muted" id="geoStatus">—</div>
 
-      <button class="btn" onclick="updateLocationNow()" data-i18n="geo_update">Joylashuvni yangilash</button>
+      <button class="btn" onclick="updateLocationNow()" data-i18n="geo_update">
+        Joylashuvni yangilash
+      </button>
 
       <p class="muted small" data-i18n="geo_hint">
         Geo yoqilsa, e’lonlar sizga yaqinligi bo‘yicha saralanadi.
@@ -509,11 +505,6 @@
           <input id="ep-car-number" />
         </label>
 
-        <label class="field">
-          <span data-i18n="photo_url">Foto (URL)</span>
-          <input id="ep-photo" />
-        </label>
-
         <div class="row2">
           <button class="btn primary" onclick="saveProfileEdit()" data-i18n="save">Saqlash</button>
           <button class="btn" onclick="closeSheet('editProfileSheet')" data-i18n="close">Yopish</button>
@@ -534,87 +525,73 @@
     </div>
   </div>
 
-  <!-- ORDERS -->
-  <div id="ordersSheet" class="sheet-wrap" onclick="sheetOutside(event,'ordersSheet')">
+  <!-- PROFILES SHEET -->
+  <div id="profilesSheet" class="sheet-wrap" onclick="sheetOutside(event,'profilesSheet')">
     <div class="bottom-sheet glass" onclick="event.stopPropagation()">
       <div class="sheet-head">
-        <div class="sheet-head-title">🧾 Orders</div>
-        <button class="icon-btn" onclick="closeSheet('ordersSheet')">✕</button>
+        <div class="sheet-head-title">👥 Profiles</div>
+        <button class="icon-btn" onclick="closeSheet('profilesSheet')">✕</button>
       </div>
-      <div id="ordersList" class="cards small-cards"></div>
+
+      <div class="glass search-box">
+        <input id="profilesSearch" class="search-input" placeholder="🔎 Search profile..."
+               oninput="searchProfiles()" />
+      </div>
+
+      <div id="profilesList" class="cards small-cards"></div>
     </div>
   </div>
 
-  <!-- TOP DRIVERS -->
-  <div id="topDriversSheet" class="sheet-wrap" onclick="sheetOutside(event,'topDriversSheet')">
+  <!-- NEWS SHEET -->
+  <div id="newsSheet" class="sheet-wrap" onclick="sheetOutside(event,'newsSheet')">
     <div class="bottom-sheet glass" onclick="event.stopPropagation()">
       <div class="sheet-head">
-        <div class="sheet-head-title">🏆 Top Drivers</div>
-        <button class="icon-btn" onclick="closeSheet('topDriversSheet')">✕</button>
+        <div class="sheet-head-title">📰 News</div>
+        <button class="icon-btn" onclick="closeSheet('newsSheet')">✕</button>
       </div>
-      <div id="topDriversList" class="cards"></div>
+
+      <!-- ADMIN CREATE NEWS -->
+      <div class="news-admin-box glass-soft">
+        <div class="mini muted">Admin post (faqat admin ishlaydi)</div>
+        <input id="newsTitle" class="news-input" placeholder="News title..." />
+        <textarea id="newsText" class="news-textarea" placeholder="News text..."></textarea>
+        <button class="btn primary full" onclick="adminCreateNews()">➕ Post News (device image)</button>
+      </div>
+
+      <div id="newsList" class="cards small-cards"></div>
     </div>
   </div>
 
-  <!-- FILTER SHEET -->
-  <div id="filterSheet" class="sheet-wrap" onclick="sheetOutside(event,'filterSheet')">
+  <!-- CHAT LIST SHEET -->
+  <div id="chatListSheet" class="sheet-wrap" onclick="sheetOutside(event,'chatListSheet')">
     <div class="bottom-sheet glass" onclick="event.stopPropagation()">
       <div class="sheet-head">
-        <div class="sheet-head-title">⚡ Filters</div>
-        <button class="icon-btn" onclick="closeSheet('filterSheet')">✕</button>
+        <div class="sheet-head-title">💬 Chats</div>
+        <button class="icon-btn" onclick="closeSheet('chatListSheet')">✕</button>
       </div>
 
-      <div class="form-grid compact">
-        <div class="row2">
-          <label class="field"><span>Price min</span><input id="fPriceMin" placeholder="0" inputmode="numeric" /></label>
-          <label class="field"><span>Price max</span><input id="fPriceMax" placeholder="50000" inputmode="numeric" /></label>
-        </div>
-
-        <div class="row2">
-          <label class="field"><span>Seats ≥</span><input id="fSeats" placeholder="1" inputmode="numeric" /></label>
-          <label class="field"><span>Rating ≥</span><input id="fRating" placeholder="4.0" inputmode="decimal" /></label>
-        </div>
-
-        <label class="field">
-          <span>Only Online Drivers</span>
-          <select id="fOnline">
-            <option value="1">Yes</option>
-            <option value="0">No</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Near me radius (km)</span>
-          <select id="fRadius">
-            <option value="0">Any</option>
-            <option value="2">2 km</option>
-            <option value="5">5 km</option>
-            <option value="10">10 km</option>
-            <option value="20">20 km</option>
-          </select>
-        </label>
-
-        <div class="row2">
-          <button class="btn primary" onclick="saveFilters()">✅ Apply</button>
-          <button class="btn" onclick="resetFilters()">♻ Reset</button>
-        </div>
-      </div>
+      <div id="chatList" class="cards small-cards"></div>
     </div>
   </div>
 
-  <!-- PROMO BANNER -->
-  <div id="bannerModal" class="sheet-wrap" onclick="sheetOutside(event,'bannerModal')">
-    <div class="bottom-sheet glass" onclick="event.stopPropagation()">
+  <!-- CHAT SHEET -->
+  <div id="chatSheet" class="sheet-wrap" onclick="sheetOutside(event,'chatSheet')">
+    <div class="bottom-sheet glass chat-sheet" onclick="event.stopPropagation()">
       <div class="sheet-head">
-        <div class="sheet-head-title">📣 Reklama</div>
-        <button class="icon-btn" onclick="closeSheet('bannerModal')">✕</button>
+        <div>
+          <div class="sheet-head-title" id="chatPeerName">Chat</div>
+          <div class="mini muted" id="chatTyping"></div>
+        </div>
+        <button class="icon-btn" onclick="closeChat()">✕</button>
       </div>
 
-      <div id="bannerBody" class="banner-card"></div>
+      <div id="chatMessages" class="chat-messages"></div>
 
-      <div class="row2" style="margin-top:10px;">
-        <button class="btn" onclick="hideBannerToday()">🕒 Bugun ko‘rsatma</button>
-        <button class="btn primary" onclick="openBannerLink()">🔗 Ochish</button>
+      <div class="chat-input-bar">
+        <button class="icon-btn small" onclick="sendVoiceMessage()">🎤</button>
+        <input id="chatInput" class="chat-input" placeholder="Type message..."
+               oninput="chatTyping()" />
+        <button class="icon-btn small" onclick="sendChatMessage()">➤</button>
       </div>
     </div>
   </div>
