@@ -7,6 +7,7 @@
  */
 const BACKEND_URL = "https://taxi-backend-5kl2.onrender.com";
 const ADMIN_TELEGRAM_ID = 6813692852;
+const WS_URL = "https://ws-server-jd2x.onrender.com"
 
 let FEED_MODE = "drivers";
 let SORT_MODE = "time";
