@@ -152,20 +152,23 @@ def ads_create(ad):
         ad.get("carNumber",""),
         ad.get("photo",""),
         ad.get("bio",""),
+
         ad.get("from",""),
         ad.get("to",""),
         ad.get("type","now"),
         str(ad.get("price","")),
         int(ad.get("seats",0) or 0),
         ad.get("comment",""),
-        ad.get("lat",None),
-        ad.get("lng",None),
+
+        ad.get("lat", None),
+        ad.get("lng", None),
         ts
     ))
 
     conn.commit()
     conn.close()
     return True
+
 
 def ads_list(limit=50, offset=0):
     ads_cleanup(3600)
