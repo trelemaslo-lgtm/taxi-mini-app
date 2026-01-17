@@ -791,26 +791,19 @@ window.publishAd = async ()=>{
     return;
   }
 
-  const fromEl = document.getElementById("ad-from");
-  const toEl = document.getElementById("ad-to");
-  const typeEl = document.getElementById("ad-type");
-  const priceEl = document.getElementById("ad-price");
-  const seatsEl = document.getElementById("ad-seats");
-  const commentEl = document.getElementById("ad-comment");
-
-  const from = fromEl.value.trim();
-  const to = toEl.value.trim();
-  const type = typeEl.value;
-  const price = priceEl.value.trim();
-  const seats = seatsEl.value.trim();
-  const comment = (commentEl?.value || "").trim();
+  const from = document.getElementById("ad-from")?.value.trim();
+  const to = document.getElementById("ad-to")?.value.trim();
+  const type = document.getElementById("ad-type")?.value || "now";
+  const price = document.getElementById("ad-price")?.value.trim();
+  const seatsRaw = document.getElementById("ad-seats")?.value.trim();
+  const comment = document.getElementById("ad-comment")?.value.trim() || "";
 
   if(!from || !to || !price){
     alert(t("fill_required"));
     return;
   }
 
-  let seatsNum = parseInt(seats || "0", 10);
+  let seatsNum = parseInt(seatsRaw || "0", 10);
   if(Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
   if(seatsNum > 4) seatsNum = 4;
 
@@ -828,25 +821,29 @@ window.publishAd = async ()=>{
     from,
     to,
     type,
-    price,
+    price: String(price),
     seats: seatsNum,
     comment,
 
-    lat: geo?.lat || null,
-    lng: geo?.lng || null,
+    lat: geo?.lat ?? null,
+    lng: geo?.lng ?? null
   };
 
   try{
-    const r = await apiFetch(API + "/api/ads", {
-      method:"POST",
+    console.log("POST /api/ads payload:", payload);
+
+    const r = await fetch(API + "/api/ads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
 
     const j = await r.json().catch(()=>({}));
 
-    if(!r.ok){
-      console.log("Publish error:", r.status, j);
-      throw new Error("Publish failed");
+    console.log("POST /api/ads response:", r.status, j);
+
+    if(!r.ok || j.ok === false){
+      throw new Error(j.error || "publish failed");
     }
 
     closeSheet("createAdSheet");
@@ -855,9 +852,11 @@ window.publishAd = async ()=>{
     loadAds(true);
     renderMyAds();
   }catch(e){
+    console.log("Publish ERROR:", e);
     toast(t("publish_error"), true);
   }
 };
+
 
 function clearAdForm(){
   ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{
