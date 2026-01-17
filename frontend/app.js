@@ -785,25 +785,71 @@ window.msgUser = (phone,name)=>{
 
 // ===== PUBLISH AD =====
 window.publishAd = async ()=>{
+ async function postWithRetry(url, payload, retries=2){
+  for(let i=0;i<=retries;i++){
+    try{
+      const r = await fetch(url, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const j = await r.json().catch(()=>({}));
+
+      // OK
+      if(r.ok && (j.ok === undefined || j.ok === true)){
+        return { ok:true, status:r.status, data:j };
+      }
+
+      // 4xx => retry qilmaymiz
+      if(r.status >= 400 && r.status < 500){
+        return { ok:false, status:r.status, data:j };
+      }
+
+    }catch(e){
+      // render cold-start bo'lishi mumkin -> retry qilamiz
+    }
+
+    // wait 0.8s and retry
+    await new Promise(res=>setTimeout(res, 800));
+  }
+
+  return { ok:false, status:0, data:{} };
+}
+
+window.publishAd = async ()=>{
   const profile = getProfile();
   if(!profile){
     alert(t("need_profile"));
     return;
   }
 
-  const from = document.getElementById("ad-from")?.value.trim();
-  const to = document.getElementById("ad-to")?.value.trim();
-  const type = document.getElementById("ad-type")?.value || "now";
-  const price = document.getElementById("ad-price")?.value.trim();
-  const seatsRaw = document.getElementById("ad-seats")?.value.trim();
-  const comment = document.getElementById("ad-comment")?.value.trim() || "";
+  const fromEl = document.getElementById("ad-from");
+  const toEl = document.getElementById("ad-to");
+  const typeEl = document.getElementById("ad-type");
+  const priceEl = document.getElementById("ad-price");
+  const seatsEl = document.getElementById("ad-seats");
+  const commentEl = document.getElementById("ad-comment");
+
+  // ID lar borligini tekshir
+  if(!fromEl || !toEl || !typeEl || !priceEl || !seatsEl){
+    toast("❌ HTML input id xato!", true);
+    return;
+  }
+
+  const from = fromEl.value.trim();
+  const to = toEl.value.trim();
+  const type = typeEl.value || "now";
+  const price = priceEl.value.trim();
+  const seats = seatsEl.value.trim();
+  const comment = (commentEl?.value || "").trim();
 
   if(!from || !to || !price){
     alert(t("fill_required"));
     return;
   }
 
-  let seatsNum = parseInt(seatsRaw || "0", 10);
+  let seatsNum = parseInt(seats || "0", 10);
   if(Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
   if(seatsNum > 4) seatsNum = 4;
 
@@ -826,33 +872,33 @@ window.publishAd = async ()=>{
     comment,
 
     lat: geo?.lat ?? null,
-    lng: geo?.lng ?? null
+    lng: geo?.lng ?? null,
   };
 
+  console.log("✅ PUBLISH PAYLOAD:", payload);
+
   try{
-    console.log("POST /api/ads payload:", payload);
+    const result = await postWithRetry(API + "/api/ads", payload, 2);
 
-    const r = await fetch(API + "/api/ads", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+    console.log("✅ PUBLISH RESPONSE:", result.status, result.data);
 
-    const j = await r.json().catch(()=>({}));
-
-    console.log("POST /api/ads response:", r.status, j);
-
-    if(!r.ok || j.ok === false){
-      throw new Error(j.error || "publish failed");
+    if(!result.ok){
+      const msg = result.data?.error || "Publish failed";
+      toast("❌ " + msg, true);
+      return;
     }
 
     closeSheet("createAdSheet");
     toast(t("published_ok"));
+
     clearAdForm();
-    loadAds(true);
-    renderMyAds();
+
+    // reload
+    await loadAds(true);
+    await renderMyAds();
+
   }catch(e){
-    console.log("Publish ERROR:", e);
+    console.log("❌ Publish ERROR:", e);
     toast(t("publish_error"), true);
   }
 };
