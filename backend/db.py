@@ -6,9 +6,15 @@ DB_PATH = os.environ.get("DB_PATH", "taxi.db")
 
 # ===== CONNECTION =====
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+    except:
+        pass
     return conn
+
 
 # ===== INIT DB =====
 def init_db():
