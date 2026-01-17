@@ -24,7 +24,7 @@ from db import (
 )
 
 # ===== CONFIG =====
-ADMIN_TG_ID = os.environ.get("ADMIN_TG_ID", "123456789")  # <-- YOUR TELEGRAM ID
+ADMIN_TG_ID = os.environ.get("ADMIN_TG_ID", "6813692852")  # <-- YOUR TELEGRAM ID
 APP_SECRET = os.environ.get("APP_SECRET", "711GROUP")
 
 app = Flask(__name__)
