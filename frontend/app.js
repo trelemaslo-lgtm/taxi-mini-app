@@ -1,15 +1,66 @@
-// =============================
-// 711 TAXI — ULTRA FRONTEND v2.5+
-// Works with: ULTRA Flask backend + WS server
-// =============================
+// =====================================================
+// 711 TAXI MINI APP — ULTRA FINAL PACK (SINGLE app.js)
+// FULL VERSION (1/3): I18N + CORE + ADS + GEO + UPLOAD
+// =====================================================
 
-// ====== CONFIG ======
+// =============================
+// CONFIG
+// =============================
 const API = "https://taxi-backend-5kl2.onrender.com";
-const WS_HTTP = "https://taxi-mini-app.onrender.com"; // your WS service
 const ADMIN_TELEGRAM_ID = "6813692852";
-const AUTO_DELETE_SECONDS = 60 * 60; // (old) optional
 
-// ====== I18N ======
+// =============================
+// HELPERS
+// =============================
+const $ = (id)=>document.getElementById(id);
+const $$ = (q)=>document.querySelector(q);
+const $$$ = (q)=>Array.from(document.querySelectorAll(q));
+
+function safeJson(str, fallback){ try{return JSON.parse(str);}catch{return fallback;} }
+function escapeHtml(str){
+  return String(str || "").replace(/[&<>"']/g, s=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[s]));
+}
+function escapeJs(str){
+  return String(str||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+}
+
+// =============================
+// TELEGRAM SAFE
+// =============================
+function tgUser(){
+  try{ return Telegram?.WebApp?.initDataUnsafe?.user || null; }catch(e){ return null; }
+}
+function tgId(){ return String(tgUser()?.id || ""); }
+function tgName(){
+  const u=tgUser();
+  if(!u) return "";
+  return (u.first_name || "") + (u.last_name ? (" " + u.last_name) : "");
+}
+function tgUsername(){
+  const u=tgUser();
+  if(!u) return "";
+  return u.username ? ("@" + u.username) : "";
+}
+function isAdminLocal(){ return tgId() === String(ADMIN_TELEGRAM_ID); }
+
+// =============================
+// LOCAL STORAGE KEYS
+// =============================
+const LS = {
+  lang:"lang",
+  role:"role",
+  profile:"profile",
+  geo:"geo",
+  notify:"notify",
+  favorites:"favorites",
+  bannerSeen:"bannerSeen"
+};
+
+// =============================
+// I18N (FULL)
+// =============================
 const DICT = {
   uz: {
     choose_lang: "Tilni tanlang",
@@ -22,7 +73,6 @@ const DICT = {
     phone: "Telefon",
     car_brand: "Mashina markasi",
     car_number: "Mashina raqami",
-    photo_url: "Foto (URL)",
     about_short: "Qisqa info",
     continue: "Davom etish",
     back: "Orqaga",
@@ -38,7 +88,7 @@ const DICT = {
     point_a: "TOCHKA A",
     point_b: "TOCHKA B",
     ad_type: "Tur",
-    type_now: "HOZIR KETAMIZ",
+    type_now: "SRAZU EDI",
     type_20: "20 daqiqada",
     type_fill: "Odam to‘lsa",
     price: "Narx",
@@ -54,7 +104,7 @@ const DICT = {
     donate: "Donat",
     about: "Biz haqimizda",
     about_text: "Bu mini-ilova kichik shahar uchun: tez e’lon, tez qo‘ng‘iroq, qulay tanlash.",
-    donate_text: "Loyiha rivoji uchun qo‘llab-quvvatlang. Sizning donatingiz server va yangilanishlarga ketadi.",
+    donate_text: "Loyiha rivoji uchun qo‘llab-quvvatlang. Donatlar server va yangilanishlarga ketadi.",
     donate_btn: "Donat qilish",
 
     nav_home: "Bosh",
@@ -77,8 +127,8 @@ const DICT = {
     message: "Yozish",
     published_ok: "✅ E’lon joylandi",
     publish_error: "❌ E’lon berishda xatolik",
-    need_profile: "❗️ Profilni to‘ldiring",
-    fill_required: "❗️ A, B va Narx shart!",
+    need_profile: "❗ Profilni to‘ldiring",
+    fill_required: "❗ A, B va Narx shart!",
   },
 
   ru: {
@@ -92,7 +142,6 @@ const DICT = {
     phone: "Телефон",
     car_brand: "Марка машины",
     car_number: "Номер машины",
-    photo_url: "Фото (URL)",
     about_short: "Коротко о себе",
     continue: "Продолжить",
     back: "Назад",
@@ -105,8 +154,8 @@ const DICT = {
     sort_time: "Сортировка: по времени",
 
     create_ad: "Создать объявление",
-    point_a: "ТОЧКА А",
-    point_b: "ТОЧКА Б",
+    point_a: "ТОЧКА A",
+    point_b: "ТОЧКА B",
     ad_type: "Тип",
     type_now: "СРАЗУ ЕДУ",
     type_20: "Через 20 минут",
@@ -123,7 +172,7 @@ const DICT = {
     notifications: "Уведомления",
     donate: "Донат",
     about: "О нас",
-    about_text: "Это мини-приложение для маленького города: быстрое объявление, звонок и удобный выбор.",
+    about_text: "Мини-приложение для города: быстрое объявление, звонок, удобный выбор.",
     donate_text: "Поддержите развитие проекта. Донаты идут на сервер и обновления.",
     donate_btn: "Поддержать",
 
@@ -141,13 +190,14 @@ const DICT = {
     geo_enable: "Включить гео",
     geo_update: "Обновить местоположение",
     geo_hint: "Если гео включено — сортируем по дистанции.",
+
     no_ads: "Пока нет объявлений",
     call: "Позвонить",
     message: "Написать",
     published_ok: "✅ Объявление опубликовано",
     publish_error: "❌ Ошибка публикации",
-    need_profile: "❗️ Заполните профиль",
-    fill_required: "❗️ Точка A, B и цена обязательны!",
+    need_profile: "❗ Заполните профиль",
+    fill_required: "❗ A, B и цена обязательны!",
   },
 
   uzk: {
@@ -161,7 +211,6 @@ const DICT = {
     phone: "Телефон",
     car_brand: "Машина маркаси",
     car_number: "Машина рақами",
-    photo_url: "Фото (URL)",
     about_short: "Қисқа маълумот",
     continue: "Давом этиш",
     back: "Орқага",
@@ -174,8 +223,8 @@ const DICT = {
     sort_time: "Саралаш: вақт",
 
     create_ad: "Эълон яратиш",
-    point_a: "TOCHKA A",
-    point_b: "TOCHKA B",
+    point_a: "ТОЧКА A",
+    point_b: "ТОЧКА B",
     ad_type: "Тур",
     type_now: "ҲОЗИР ЙЎЛГА ЧИҚАМАН",
     type_20: "20 дақиқада",
@@ -216,472 +265,142 @@ const DICT = {
     message: "Ёзиш",
     published_ok: "✅ Эълон жойланди",
     publish_error: "❌ Эълонда хатолик",
-    need_profile: "❗️ Профилни тўлдиринг",
-    fill_required: "❗️ A, B ва нарх шарт!",
+    need_profile: "❗ Профилни тўлдиринг",
+    fill_required: "❗ A, B ва нарх шарт!",
   }
 };
 
-// ========= SAFE HELPERS =========
-const $ = (id) => document.getElementById(id);
-
-function safeJson(v, fallback){
-  try { return JSON.parse(v); } catch { return fallback; }
+function t(key){
+  const lang = localStorage.getItem(LS.lang) || "uz";
+  return (DICT[lang] && DICT[lang][key]) ? DICT[lang][key] : (DICT["uz"][key] || key);
 }
 
-function escapeHtml(str){
-  return String(str || "").replace(/[&<>"']/g, s=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[s]));
-}
-function escapeJs(str){
-  return String(str||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-}
-
-// ====== TELEGRAM SAFE ======
-function tgUser(){
-  try{
-    return Telegram?.WebApp?.initDataUnsafe?.user || null;
-  }catch(e){ return null; }
-}
-function tgId(){
-  return String(tgUser()?.id || "");
-}
-function tgName(){
-  const u = tgUser();
-  if(!u) return "";
-  return (u.first_name || "") + (u.last_name ? (" " + u.last_name) : "");
-}
-function tgUsername(){
-  const u = tgUser();
-  if(!u) return "";
-  return u.username ? ("@" + u.username) : "";
-}
-
-// ====== UI HELPERS ======
-function showScreen(id){
-  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
-  const el = document.getElementById(id);
-  if(el) el.classList.add("active");
-}
-
-function setActiveNav(name){
-  ["navHome","navCreate","navProfile","navSettings"].forEach(id=>{
-    const b = document.getElementById(id);
-    if(b) b.classList.remove("active");
+function applyI18n(){
+  $$$("[data-i18n]").forEach(el=>{
+    const k = el.getAttribute("data-i18n");
+    el.innerText = t(k);
   });
+  const lang = localStorage.getItem(LS.lang) || "uz";
+  const badge = $("langBadge");
+  if(badge) badge.innerText = lang;
+}
+
+// =============================
+// UI + NAV + SHEETS
+// =============================
+function showScreen(id){
+  $$$(".screen").forEach(s=>s.classList.remove("active"));
+  $(id)?.classList.add("active");
+}
+function setActiveNav(name){
+  ["navHome","navCreate","navProfile","navSettings"].forEach(id=>$(id)?.classList.remove("active"));
   if(name==="home") $("navHome")?.classList.add("active");
   if(name==="profile") $("navProfile")?.classList.add("active");
 }
-
-function openSheet(id){
-  const el = $(id);
-  if(el) el.classList.add("open");
-}
-function closeSheet(id){
-  const el = $(id);
-  if(el) el.classList.remove("open");
-}
-function sheetOutside(e,id){
-  if(e.target.id===id) closeSheet(id);
-}
-window.openSheet = openSheet;
-window.closeSheet = closeSheet;
-window.sheetOutside = sheetOutside;
+function openSheet(id){ $(id)?.classList.add("open"); }
+function closeSheet(id){ $(id)?.classList.remove("open"); }
+function sheetOutside(e,id){ if(e.target.id===id) closeSheet(id); }
+window.openSheet=openSheet; window.closeSheet=closeSheet; window.sheetOutside=sheetOutside;
 
 function toast(msg, danger=false){
   try{
-    if(window.Telegram && Telegram.WebApp){
-      Telegram.WebApp.showPopup({
-        title: danger ? "❌" : "✅",
-        message: msg,
-        buttons:[{type:"ok"}]
-      });
-      return;
-    }
+    Telegram.WebApp.showPopup({
+      title: danger ? "❌" : "✅",
+      message: msg,
+      buttons:[{type:"ok"}]
+    });
+    return;
   }catch(e){}
   alert(msg);
 }
 
-// ====== STATE ======
-let FEED_MODE = "drivers"; // drivers | clients
-let SORT_MODE = "time";    // time | distance
-let ADS_CACHE = [];
-let USERS_CACHE = [];
-let ONLINE_SET = new Set(); // WS online
+// =============================
+// API
+// =============================
+async function apiGet(path){
+  const r = await fetch(API+path);
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j?.error||"GET failed");
+  return j;
+}
+async function apiPost(path, body){
+  const r = await fetch(API+path,{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body||{})
+  });
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j?.error||"POST failed");
+  return j;
+}
+async function apiDelete(path){
+  const r = await fetch(API+path,{ method:"DELETE" });
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j?.error||"DELETE failed");
+  return j;
+}
 
-// ====== LOCAL STORAGE KEYS ======
-const LS = {
-  lang: "lang",
-  role: "role",
-  profile: "profile",
-  geo: "geo",
-  notify: "notify",
-  bannerSeen: "bannerSeen"
-};
-
-// ====== PROFILE (LOCAL BASIC CACHE) ======
-function getProfile(){
-  return safeJson(localStorage.getItem(LS.profile) || "null", null);
-}
-function setProfile(p){
-  localStorage.setItem(LS.profile, JSON.stringify(p));
-}
-
-// ====== GEO ======
-function saveGeo(lat,lng){
-  localStorage.setItem(LS.geo, JSON.stringify({lat,lng,ts:Date.now()}));
-}
-function getGeo(){
-  return safeJson(localStorage.getItem(LS.geo) || "null", null);
-}
+// =============================
+// GEO
+// =============================
+function saveGeo(lat,lng){ localStorage.setItem(LS.geo, JSON.stringify({lat,lng,ts:Date.now()})); }
+function getGeo(){ return safeJson(localStorage.getItem(LS.geo)||"null", null); }
 function distanceKm(lat1, lon1, lat2, lon2){
   const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
-    Math.sin(dLon/2)**2;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
 // =============================
-// BACKEND API WRAPPER
+// STATE
 // =============================
-async function apiGet(path){
-  const r = await fetch(API + path);
-  const j = await r.json().catch(()=> ({}));
-  if(!r.ok) throw new Error(j?.error || "GET failed");
-  return j;
-}
-async function apiPost(path, body){
-  const r = await fetch(API + path, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(body || {})
-  });
-  const j = await r.json().catch(()=> ({}));
-  if(!r.ok) throw new Error(j?.error || "POST failed");
-  return j;
-}
-async function apiPut(path, body){
-  const r = await fetch(API + path, {
-    method:"PUT",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(body || {})
-  });
-  const j = await r.json().catch(()=> ({}));
-  if(!r.ok) throw new Error(j?.error || "PUT failed");
-  return j;
-}
-async function apiDelete(path){
-  const r = await fetch(API + path, { method:"DELETE" });
-  const j = await r.json().catch(()=> ({}));
-  if(!r.ok) throw new Error(j?.error || "DELETE failed");
-  return j;
-}
+let FEED_MODE="drivers";
+let SORT_MODE="time";
+let ADS_CACHE=[];
 
 // =============================
-// SUPABASE UPLOAD via BACKEND
+// PROFILE LOCAL
 // =============================
-async function uploadFileToBackend(file){
-  const fd = new FormData();
-  fd.append("file", file);
-
-  const r = await fetch(API + "/api/upload", {
-    method:"POST",
-    body: fd
-  });
-  const j = await r.json().catch(()=> ({}));
-  if(!r.ok || !j.ok) throw new Error(j?.error || "upload failed");
-  return j.url;
-}
-
-// =============================
-// WS (CHAT + PRESENCE)
-// =============================
-let ws = null;
-let wsRetry = 0;
-let wsPingTimer = null;
-
-function wsUrl(){
-  const base = WS_HTTP.replace("https://","wss://").replace("http://","ws://");
-  const uid = tgId() || "guest";
-  return `${base}/ws?uid=${encodeURIComponent(uid)}`;
-}
-
-function wsSend(obj){
-  try{
-    if(!ws || ws.readyState !== 1) return;
-    ws.send(JSON.stringify(obj));
-  }catch(e){}
-}
-
-function wsConnect(){
-  try{
-    if(ws && (ws.readyState===0 || ws.readyState===1)) return;
-
-    ws = new WebSocket(wsUrl());
-
-    ws.onopen = ()=>{
-      wsRetry = 0;
-      console.log("✅ WS connected");
-
-      if(wsPingTimer) clearInterval(wsPingTimer);
-      wsPingTimer = setInterval(()=> wsSend({type:"ping"}), 20000);
-
-      // request online list
-      wsSend({type:"presence_list"});
-    };
-
-    ws.onmessage = (e)=>{
-      try{
-        const msg = JSON.parse(e.data);
-
-        if(msg.type==="presence_list"){
-          ONLINE_SET = new Set(msg.online || []);
-          renderCards(); // refresh online badges
-          return;
-        }
-
-        if(msg.type==="presence"){
-          const uid = String(msg.uid||"");
-          if(msg.status==="online") ONLINE_SET.add(uid);
-          if(msg.status==="offline") ONLINE_SET.delete(uid);
-          renderCards();
-          return;
-        }
-
-        if(msg.type==="typing"){
-          handleTyping(msg);
-          return;
-        }
-
-        if(msg.type==="message"){
-          handleIncomingMessage(msg);
-          return;
-        }
-
-      }catch(err){
-        console.log("WS message parse error", err);
-      }
-    };
-
-    ws.onclose = ()=>{
-      console.log("❌ WS disconnected");
-      if(wsPingTimer) clearInterval(wsPingTimer);
-      wsRetry++;
-      const wait = Math.min(15000, 700 * wsRetry);
-      setTimeout(wsConnect, wait);
-    };
-
-    ws.onerror = ()=>{
-      // do nothing
-    };
-
-  }catch(e){
-    console.log("WS connect error", e);
-  }
-}
-
-// =============================
-// CHAT (ULTRA BASIC UI LOGIC)
-// NOTE: We use Telegram popup minimal now.
-// Full chat screen later (final UI).
-// =============================
-let ACTIVE_CHAT = null; // {chat_id, to, name}
-
-async function openChat(toTelegramId, name){
-  const my = tgId();
-  if(!my || !toTelegramId) return;
-
-  const chat_id = [my, String(toTelegramId)].sort().join("_");
-  ACTIVE_CHAT = { chat_id, to: String(toTelegramId), name: name || "User" };
-
-  // load history
-  let items = [];
-  try{
-    const j = await apiGet(`/api/messages/${encodeURIComponent(chat_id)}?limit=60`);
-    items = j.items || [];
-  }catch(e){}
-
-  // show simple popup with last messages + send
-  const last = items.slice(0,8).reverse().map(m=>{
-    const who = (String(m.from_telegram_id)===my) ? "You" : (name||"User");
-    return `${who}: ${m.text || (m.voice_url ? "🎤 Voice" : "")}`;
-  }).join("\n");
-
-  try{
-    Telegram.WebApp.showPopup({
-      title: "💬 " + (name||"Chat"),
-      message: last ? last : "Chat ready ✅\nYozing...",
-      buttons: [{id:"send", type:"default", text:"Send message"},{type:"cancel"}]
-    }, (btnId)=>{
-      if(btnId==="send"){
-        Telegram.WebApp.showPopup({
-          title:"✍️",
-          message:"Message yuborish uchun pastdagi inputdan foydalanamiz (keyingi update).",
-          buttons:[{type:"ok"}]
-        });
-      }
-    });
-  }catch(e){
-    alert("Chat opened");
-  }
-}
-
-function handleTyping(msg){
-  // typing indicator placeholder
-}
-
-async function handleIncomingMessage(msg){
-  // save to backend for history
-  try{
-    await apiPost("/api/messages/save", {
-      chat_id: msg.chat_id,
-      from_telegram_id: msg.from,
-      to_telegram_id: msg.to,
-      text: msg.text || ""
-    });
-  }catch(e){}
-}
-
-// send text message (hook later)
-async function sendChatText(text){
-  if(!ACTIVE_CHAT) return;
-  const my = tgId();
-  wsSend({
-    type:"message",
-    chat_id: ACTIVE_CHAT.chat_id,
-    to: ACTIVE_CHAT.to,
-    text: text
-  });
-
-  // save
-  try{
-    await apiPost("/api/messages/save", {
-      chat_id: ACTIVE_CHAT.chat_id,
-      from_telegram_id: my,
-      to_telegram_id: ACTIVE_CHAT.to,
-      text: text
-    });
-  }catch(e){}
-}
-
-// =============================
-// ADMIN CHECK
-// =============================
-function isAdminLocal(){
-  return tgId() === ADMIN_TELEGRAM_ID;
-}
-
-// =============================
-// BANNER (3s on enter)
-// =============================
-async function checkAndShowBanner(){
-  try{
-    const seenKey = LS.bannerSeen + ":" + (new Date().toDateString());
-    if(localStorage.getItem(seenKey)==="1") return;
-
-    const j = await apiGet("/api/admin/banner");
-    const banner = j.banner;
-    if(!banner || !banner.image_url) return;
-
-    // create overlay
-    const wrap = document.createElement("div");
-    wrap.style.position = "fixed";
-    wrap.style.inset = "0";
-    wrap.style.zIndex = "9999";
-    wrap.style.background = "rgba(0,0,0,.55)";
-    wrap.style.backdropFilter = "blur(10px)";
-    wrap.style.display = "grid";
-    wrap.style.placeItems = "center";
-
-    wrap.innerHTML = `
-      <div style="
-        width:min(420px,92vw);
-        border-radius:24px;
-        overflow:hidden;
-        border:1px solid rgba(255,255,255,.18);
-        background:rgba(255,255,255,.08);
-      ">
-        <img src="${escapeHtml(banner.image_url)}" style="width:100%; display:block;" />
-      </div>
-    `;
-
-    document.body.appendChild(wrap);
-
-    setTimeout(()=>{
-      wrap.remove();
-      localStorage.setItem(seenKey,"1");
-    }, 3000);
-
-  }catch(e){}
-}
+function getProfile(){ return safeJson(localStorage.getItem(LS.profile)||"null", null); }
+function setProfile(p){ localStorage.setItem(LS.profile, JSON.stringify(p)); }
 
 // =============================
 // BOOT
 // =============================
 document.addEventListener("DOMContentLoaded", async ()=>{
   try{
-    if(window.Telegram && Telegram.WebApp){
-      Telegram.WebApp.ready();
-      Telegram.WebApp.expand();
-    }
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
   }catch(e){}
 
-  // loading hide
   setTimeout(()=> $("loading")?.classList.remove("active"), 900);
 
-  // ws connect
-  wsConnect();
-
-  // show banner
-  checkAndShowBanner();
-
-  // init toggles
+  applyI18n();
   initToggles();
-
-  // admin btn show
   checkAdminBtn();
 
-  // auto profile prefill from TG (first time)
-  prefillProfileFromTelegram();
-
-  // start logic
+  // Start flow
   const lang = localStorage.getItem(LS.lang);
   const role = localStorage.getItem(LS.role);
   const profile = getProfile();
 
-  if(typeof applyI18n === "function") applyI18n();
-
-  if(!lang){
-    showScreen("screen-language");
-    return;
-  }
-  if(!role){
-    showScreen("screen-role");
-    return;
-  }
-  if(!profile){
-    showScreen("screen-profile");
-    updateProfileUIRole();
-    return;
-  }
-
-  // sync profile to backend (upsert)
-  await syncProfileToBackend();
+  if(!lang) return showScreen("screen-language");
+  if(!role) return showScreen("screen-role");
+  if(!profile) return showScreen("screen-profile");
 
   showScreen("screen-home");
   nav("home");
 });
 
 // =============================
-// LANGUAGE
+// LANGUAGE/ROLE
 // =============================
 window.setLang = (lang)=>{
   localStorage.setItem(LS.lang, lang);
-  if(typeof applyI18n === "function") applyI18n();
+  applyI18n();
 
   const role = localStorage.getItem(LS.role);
   const profile = getProfile();
@@ -689,56 +408,16 @@ window.setLang = (lang)=>{
   else if(!profile) showScreen("screen-profile");
 };
 
-// =============================
-// ROLE
-// =============================
 window.selectRole = (role)=>{
   localStorage.setItem(LS.role, role);
-  updateProfileUIRole();
+  const driverExtra = $("driver-extra");
+  if(driverExtra) driverExtra.style.display = role==="driver" ? "block" : "none";
   showScreen("screen-profile");
 };
 
-function updateProfileUIRole(){
-  const role = localStorage.getItem(LS.role);
-  const driverExtra = $("driver-extra");
-  if(driverExtra){
-    driverExtra.style.display = role==="driver" ? "block" : "none";
-  }
-}
-
-window.goBackTo = (id)=> showScreen(id);
-
 // =============================
-// PROFILE PREFILL + SAVE
+// SAVE PROFILE
 // =============================
-function prefillProfileFromTelegram(){
-  const u = tgUser();
-  if(!u) return;
-
-  // prefill only if inputs exist
-  if($("p-name") && !$("p-name").value) $("p-name").value = tgName();
-  if($("p-phone") && !$("p-phone").value) $("p-phone").value = ""; // user must input
-}
-
-async function syncProfileToBackend(){
-  const p = getProfile();
-  if(!p) return;
-
-  try{
-    await apiPost("/api/users/upsert", {
-      telegram_id: tgId(),
-      role: p.role,
-      name: p.name,
-      phone: p.phone,
-      username: tgUsername(),
-      bio: p.bio || "",
-      photo_url: p.photo_url || "",
-      cover_url: p.cover_url || "",
-      city: p.city || ""
-    });
-  }catch(e){}
-}
-
 window.saveProfile = async ()=>{
   const role = localStorage.getItem(LS.role);
   const name = $("p-name")?.value.trim();
@@ -748,7 +427,7 @@ window.saveProfile = async ()=>{
   const bio = $("p-bio")?.value.trim();
 
   if(!name || !phone){
-    toast("❗ Profilni to‘ldiring", true);
+    toast(t("need_profile"), true);
     return;
   }
 
@@ -760,91 +439,15 @@ window.saveProfile = async ()=>{
     phone,
     carBrand: role==="driver" ? (carBrand||"") : "",
     carNumber: role==="driver" ? (carNumber||"") : "",
-    photo_url: "",   // device only
-    cover_url: "",   // device only
     bio: bio || "",
-    city: ""
+    photo_url:"",
+    cover_url:""
   };
 
   setProfile(profile);
 
-  // sync to backend
-  await syncProfileToBackend();
-
   showScreen("screen-home");
   nav("home");
-};
-
-// =============================
-// DEVICE UPLOAD (Profile Photo / Cover)
-// =============================
-async function pickFile(){
-  return new Promise((resolve)=>{
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = ()=> resolve(input.files?.[0] || null);
-    input.click();
-  });
-}
-
-window.uploadProfilePhoto = async ()=>{
-  const p = getProfile();
-  if(!p) return;
-
-  const file = await pickFile();
-  if(!file) return;
-
-  try{
-    toast("⏳ Upload...");
-    const url = await uploadFileToBackend(file);
-    const np = {...p, photo_url: url};
-    setProfile(np);
-    await syncProfileToBackend();
-    toast("✅ Foto saqlandi");
-    renderProfileView();
-    loadAds();
-  }catch(e){
-    toast("❌ Upload error", true);
-  }
-};
-
-window.uploadCoverPhoto = async ()=>{
-  const p = getProfile();
-  if(!p) return;
-
-  const file = await pickFile();
-  if(!file) return;
-
-  try{
-    toast("⏳ Upload...");
-    const url = await uploadFileToBackend(file);
-    const np = {...p, cover_url: url};
-    setProfile(np);
-    await syncProfileToBackend();
-    toast("✅ Cover saqlandi");
-    renderProfileView();
-  }catch(e){
-    toast("❌ Upload error", true);
-  }
-};
-
-window.addCarPhoto = async ()=>{
-  const p = getProfile();
-  if(!p) return;
-
-  const file = await pickFile();
-  if(!file) return;
-
-  try{
-    toast("⏳ Upload...");
-    const url = await uploadFileToBackend(file);
-    await apiPost("/api/car-photos/add", { telegram_id: tgId(), image_url: url });
-    toast("✅ Car photo qo‘shildi");
-    renderProfileView();
-  }catch(e){
-    toast("❌ Upload error", true);
-  }
 };
 
 // =============================
@@ -855,65 +458,53 @@ window.nav = async (where)=>{
     setActiveNav("home");
     showScreen("screen-home");
     await loadAds();
-    return;
   }
   if(where==="profile"){
     setActiveNav("profile");
     showScreen("screen-profile-view");
-    await renderProfileView();
-    return;
+    // (profile UI comes in 2/3)
   }
   if(where==="admin"){
     showScreen("screen-admin");
-    await adminRefresh();
-    return;
   }
 };
 
 // =============================
-// FEED SWITCH + SEARCH
+// FEED + SEARCH + SORT
 // =============================
 window.switchFeed = async (mode)=>{
   FEED_MODE = mode;
   $("tabDrivers")?.classList.toggle("active", mode==="drivers");
   $("tabClients")?.classList.toggle("active", mode==="clients");
-  await loadAds();
-};
-
-window.searchAds = async ()=>{
-  // simple frontend filter from cache
   renderCards();
 };
 
-// =============================
-// SORT
-// =============================
-window.toggleSort = async ()=>{
+window.searchAds = ()=> renderCards();
+
+window.toggleSort = ()=>{
   const geoOn = $("geoToggle")?.checked;
-  if(geoOn){
-    SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
-  }else{
-    SORT_MODE = "time";
-  }
+  if(geoOn) SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
+  else SORT_MODE="time";
   updateSortLine();
   renderCards();
 };
 
 function updateSortLine(){
-  const el = $("sortLine");
+  const el=$("sortLine");
   if(!el) return;
+
   if(SORT_MODE==="distance"){
-    el.innerHTML = `↕️ <span>Saralash: masofa</span>`;
+    el.innerHTML = `↕️ <span>${t("sort")}: masofa</span>`;
   }else{
-    el.innerHTML = `↕️ <span>Saralash: vaqt</span>`;
+    el.innerHTML = `↕️ <span data-i18n="sort_time">${t("sort_time")}</span>`;
   }
 }
 
 // =============================
-// LOAD ADS (ULTRA)
+// LOAD ADS
 // =============================
 async function loadAds(){
-  const cards = $("cards");
+  const cards=$("cards");
   if(!cards) return;
 
   cards.innerHTML = `
@@ -927,385 +518,543 @@ async function loadAds(){
     ADS_CACHE = Array.isArray(j.ads) ? j.ads : [];
     renderCards();
   }catch(e){
-    cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ Server error</div></div>`;
+    cards.innerHTML = `<div class="glass card"><div class="muted">${t("publish_error")}</div></div>`;
   }
 }
 
 function renderCards(){
-  const cards = $("cards");
+  const cards=$("cards");
   if(!cards) return;
 
   const q = ($("searchInput")?.value || "").trim().toLowerCase();
-  const geo = getGeo();
+  const geo=getGeo();
   const geoEnabled = !!geo && ($("geoToggle")?.checked);
 
   let list = [...ADS_CACHE];
 
-  // feed filter
   list = list.filter(a=>{
-    if(FEED_MODE==="drivers") return a.role === "driver";
-    return a.role === "client";
+    if(FEED_MODE==="drivers") return a.role==="driver";
+    return a.role==="client";
   });
 
-  // search filter
   if(q){
     list = list.filter(a=>{
-      const s = `${a.name||""} ${a.phone||""} ${a.frm||a.from||""} ${a.too||a.to||""} ${a.car_brand||""} ${a.car_number||""}`.toLowerCase();
+      const s = `${a.name||""} ${a.phone||""} ${a.frm||""} ${a.too||""} ${a.car_brand||""} ${a.car_number||""}`.toLowerCase();
       return s.includes(q);
     });
   }
 
-  // sort
   if(SORT_MODE==="distance" && geoEnabled){
     list.sort((a,b)=>{
-      const da = (a.lat && a.lng) ? distanceKm(geo.lat, geo.lng, a.lat, a.lng) : 99999;
-      const db = (b.lat && b.lng) ? distanceKm(geo.lat, geo.lng, b.lat, b.lng) : 99999;
-      return da - db;
+      const da=(a.lat&&a.lng)?distanceKm(geo.lat,geo.lng,a.lat,a.lng):99999;
+      const db=(b.lat&&b.lng)?distanceKm(geo.lat,geo.lng,b.lat,b.lng):99999;
+      return da-db;
     });
   }else{
     list.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
   }
 
   if(list.length===0){
-    cards.innerHTML = `<div class="glass card"><div class="muted">Hozircha e’lon yo‘q</div></div>`;
+    cards.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
     return;
   }
 
-  cards.innerHTML = "";
-  list.forEach(ad => cards.appendChild(renderCard(ad, geo, geoEnabled)));
+  cards.innerHTML="";
+  list.forEach(ad=>cards.appendChild(renderCard(ad, geo, geoEnabled)));
+}
+
+function typeLabel(ad){
+  if(ad.ad_type==="now") return t("type_now");
+  if(ad.ad_type==="20") return t("type_20");
+  return t("type_fill");
 }
 
 function renderCard(ad, geo, geoEnabled){
-  const card = document.createElement("div");
-  card.className = "glass card";
+  const card=document.createElement("div");
+  card.className="glass card";
 
-  const avatar = ad.photo_url ? `style="background-image:url('${escapeHtml(ad.photo_url)}')"` : "";
-  const typeLabel = (()=>{
-    if(ad.ad_type==="now") return "SRAZU EDI";
-    if(ad.ad_type==="20") return "20 daqiqada";
-    return "Odam to‘lsa";
-  })();
-
-  let dist = "";
-  if(geoEnabled && geo && ad.lat && ad.lng){
-    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
-    dist = `📍 ${d.toFixed(1)} km`;
-  }
-
-  const seats = Number(ad.seats ?? 0);
-  const fullBadge = seats<=0 ? `<div class="badge" style="border-color:rgba(255,80,80,.35)">🚫 TO‘LDI</div>` : "";
-
-  const online = ONLINE_SET.has(String(ad.telegram_id||""));
-  const onlineBadge = online ? `<div class="badge">🟢 Online</div>` : `<div class="badge">⚫ Offline</div>`;
-
-  const me = tgId();
-  const isOwner = String(ad.telegram_id||"") === String(me);
-
-  const ownerSeatsControls = isOwner ? `
-    <div style="display:flex; gap:8px; align-items:center;">
-      <button class="chip" onclick="seatsDelta(${ad.id},-1)">➖</button>
-      <div class="badge">👥 ${seats}</div>
-      <button class="chip" onclick="seatsDelta(${ad.id},1)">➕</button>
-    </div>
-  ` : `<div class="badge">👥 ${seats}</div>`;
+  const avatarStyle = ad.photo_url ? `style="background-image:url('${escapeHtml(ad.photo_url)}')"` : "";
+  const dist = (geoEnabled && geo && ad.lat && ad.lng)
+    ? `📍 ${distanceKm(geo.lat, geo.lng, ad.lat, ad.lng).toFixed(1)} km`
+    : "";
 
   card.innerHTML = `
     <div class="card-head">
       <div class="card-left">
-        <div class="card-avatar" ${avatar}></div>
+        <div class="card-avatar" ${avatarStyle}></div>
         <div>
-          <div class="card-name">${escapeHtml(ad.name || "—")}</div>
-          <div class="card-sub">${escapeHtml(ad.car_brand || "")} ${escapeHtml(ad.car_number || "")}</div>
+          <div class="card-name">${escapeHtml(ad.name||"—")}</div>
+          <div class="card-sub">${escapeHtml(ad.car_brand||"")} ${escapeHtml(ad.car_number||"")}</div>
         </div>
       </div>
-
       <button class="like-btn" onclick="likeDriver('${escapeJs(ad.phone||"")}')">💛</button>
     </div>
 
-    <div class="card-body" onclick="openAdDetail(${ad.id})" style="cursor:pointer;">
+    <div class="card-body">
       <div class="route-line">
-        <span class="route-pill">${escapeHtml(ad.frm || "")}</span>
+        <span class="route-pill">${escapeHtml(ad.frm||"")}</span>
         <span>→</span>
-        <span class="route-pill">${escapeHtml(ad.too || "")}</span>
+        <span class="route-pill">${escapeHtml(ad.too||"")}</span>
       </div>
 
       <div class="card-info">
-        <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
-        ${ownerSeatsControls}
-        ${fullBadge}
+        <div class="badge">⏱ ${escapeHtml(typeLabel(ad))}</div>
+        <div class="badge">👥 ${escapeHtml(String(ad.seats ?? 0))}</div>
         <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
         ${dist ? `<div class="badge">${dist}</div>` : ""}
         <div class="badge">🏆 ${escapeHtml(String(ad.points ?? 0))}</div>
         <div class="badge">👁 ${escapeHtml(String(ad.views ?? 0))}</div>
-        ${onlineBadge}
       </div>
 
       ${ad.comment ? `<div class="badge">${escapeHtml(ad.comment)}</div>` : ""}
 
-      <div class="card-actions" onclick="event.stopPropagation()">
-        <button class="action call" onclick="callPhone('${escapeJs(ad.phone||"")}')">Qo‘ng‘iroq</button>
-        <button class="action msg" onclick="msgUser('${escapeJs(ad.telegram_id||"")}','${escapeJs(ad.name||"")}')">Yozish</button>
+      <div class="card-actions">
+        <button class="action call" onclick="callPhone('${escapeJs(ad.phone||"")}')">${t("call")}</button>
+        <button class="action msg" onclick="msgUser('${escapeJs(ad.telegram_id||"")}','${escapeJs(ad.name||"")}')">${t("message")}</button>
       </div>
     </div>
   `;
-
   return card;
 }
 
 // =============================
-// AD DETAIL + VIEW COUNT
-// =============================
-window.openAdDetail = async (adId)=>{
-  const ad = ADS_CACHE.find(x=>Number(x.id)===Number(adId));
-  if(!ad) return;
-
-  // add view
-  try{
-    await apiPost(`/api/ads/${adId}/view`, { viewer_telegram_id: tgId() });
-    // refresh ads quickly
-    await loadAds();
-  }catch(e){}
-
-  // show detail popup
-  const msg = `
-${ad.name || "—"}
-${ad.phone || ""}
-
-Маршрут:
-${ad.frm || ""} → ${ad.too || ""}
-
-Цена: ${ad.price || ""}
-Места: ${ad.seats ?? 0}
-Points: ${ad.points ?? 0}
-Views: ${ad.views ?? 0}
-
-${ad.car_brand || ""} ${ad.car_number || ""}
-${ad.comment || ""}
-  `.trim();
-
-  try{
-    Telegram.WebApp.showPopup({
-      title:"🚕 E’lon",
-      message: msg,
-      buttons:[{type:"ok"}]
-    });
-  }catch(e){
-    alert(msg);
-  }
-};
-
-// =============================
-// LIKE (backend real)
+// LIKE / CALL / MSG
 // =============================
 window.likeDriver = async (phone)=>{
   if(!phone) return;
   try{
-    await apiPost("/api/like", {
-      target_phone: phone,
-      from_telegram_id: tgId()
-    });
+    await apiPost("/api/like", { target_phone: phone, from_telegram_id: tgId() });
     await loadAds();
-    await renderProfileView();
   }catch(e){
     toast("❌ Like error", true);
   }
 };
 
-// =============================
-// SEATS DELTA (backend real)
-// =============================
-window.seatsDelta = async (adId, delta)=>{
-  try{
-    await apiPost(`/api/ads/${adId}/seats`, {
-      telegram_id: tgId(),
-      delta: delta
-    });
-    await loadAds();
-  }catch(e){
-    toast("❌ Seats error", true);
-  }
-};
-
-// =============================
-// CALL / MSG
-// =============================
 window.callPhone = (phone)=>{
   if(!phone) return;
-  window.location.href = `tel:${phone}`;
+  window.location.href=`tel:${phone}`;
 };
 
-window.msgUser = (toTelegramId, name)=>{
-  // open ultra chat
-  openChat(toTelegramId, name);
+window.msgUser = ()=>{
+  toast("💬 Chat 3/3 da qo‘shiladi ✅");
 };
 
 // =============================
-// PUBLISH AD (ULTRA)
+// PUBLISH AD
 // =============================
 window.publishAd = async ()=>{
-  const p = getProfile();
+  const p=getProfile();
   if(!p){
-    toast("❗ Profilni to‘ldiring", true);
+    toast(t("need_profile"), true);
     return;
   }
 
-  const from = $("ad-from")?.value.trim();
-  const to = $("ad-to")?.value.trim();
-  const type = $("ad-type")?.value;
-  const price = $("ad-price")?.value.trim();
-  const seats = $("ad-seats")?.value.trim();
-  const comment = ($("ad-comment")?.value || "").trim();
+  const from=$("ad-from")?.value.trim();
+  const to=$("ad-to")?.value.trim();
+  const type=$("ad-type")?.value;
+  const price=$("ad-price")?.value.trim();
+  const seats=$("ad-seats")?.value.trim();
+  const comment=($("ad-comment")?.value||"").trim();
 
   if(!from || !to || !price){
-    toast("❗ A, B va Narx shart!", true);
+    toast(t("fill_required"), true);
     return;
   }
 
-  let seatsNum = parseInt(seats || "0", 10);
-  if(Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
-  if(seatsNum > 8) seatsNum = 8;
+  let seatsNum=parseInt(seats||"0",10);
+  if(Number.isNaN(seatsNum) || seatsNum<0) seatsNum=0;
+  if(seatsNum>8) seatsNum=8;
 
-  // geo attach
-  const geoEnabled = $("geoToggle")?.checked;
-  const geo = geoEnabled ? getGeo() : null;
+  const geoEnabled=$("geoToggle")?.checked;
+  const geo=geoEnabled ? getGeo() : null;
 
-  const payload = {
+  const payload={
     telegram_id: tgId(),
     role: p.role,
     name: p.name,
     phone: p.phone,
-    car_brand: p.carBrand || "",
-    car_number: p.carNumber || "",
-    photo_url: p.photo_url || "",
-
+    car_brand: p.carBrand||"",
+    car_number: p.carNumber||"",
+    photo_url: p.photo_url||"",
     from,
     to,
     type,
     price,
     seats: seatsNum,
     comment,
-
     lat: geo?.lat || null,
     lng: geo?.lng || null
   };
 
   try{
     await apiPost("/api/ads", payload);
-
     closeSheet("createAdSheet");
-    toast("✅ E’lon joylandi");
-    clearAdForm();
+    toast(t("published_ok"));
+    ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{ if($(id)) $(id).value=""; });
     await loadAds();
-    await renderMyAds();
   }catch(e){
-    toast("❌ E’lon berishda xatolik", true);
+    toast(t("publish_error"), true);
   }
 };
 
-function clearAdForm(){
-  ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{
-    const el = $(id);
-    if(el) el.value = "";
+// =============================
+// GEO TOGGLE UI
+// =============================
+function initToggles(){
+  const geoToggle=$("geoToggle");
+  const notifyToggle=$("notifyToggle");
+
+  const notify=localStorage.getItem(LS.notify)==="1";
+  if(notifyToggle){
+    notifyToggle.checked=notify;
+    notifyToggle.onchange=()=>localStorage.setItem(LS.notify, notifyToggle.checked?"1":"0");
+  }
+
+  const geoSaved=!!getGeo();
+  if(geoToggle){
+    geoToggle.checked=geoSaved;
+    geoToggle.onchange=async ()=>{
+      if(geoToggle.checked) await updateLocationNow();
+      else{
+        localStorage.removeItem(LS.geo);
+        updateGeoLine();
+        SORT_MODE="time";
+        updateSortLine();
+        renderCards();
+      }
+    };
+  }
+
+  updateGeoLine();
+  updateSortLine();
+}
+
+window.updateLocationNow = async ()=>{
+  const geoStatus=$("geoStatus");
+  if(geoStatus) geoStatus.innerText="…";
+
+  if(!navigator.geolocation){
+    if(geoStatus) geoStatus.innerText="Geo not supported";
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      saveGeo(pos.coords.latitude,pos.coords.longitude);
+      updateGeoLine();
+      renderCards();
+      if(geoStatus) geoStatus.innerText=`✅ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+    },
+    ()=>{
+      if(geoStatus) geoStatus.innerText="❌ Geo error";
+    },
+    { enableHighAccuracy:true, timeout:12000, maximumAge:15000 }
+  );
+};
+
+function updateGeoLine(){
+  const geoLine=$("geoLine");
+  if(!geoLine) return;
+  const geo=getGeo();
+  geoLine.innerHTML = geo
+    ? `📍 <span>Geolokatsiya: ON</span>`
+    : `📍 <span data-i18n="geo_off">${t("geo_off")}</span>`;
+}
+
+// =============================
+// ADMIN BUTTON
+// =============================
+function checkAdminBtn(){
+  const adminBtn=document.querySelector(".admin-only");
+  if(!adminBtn) return;
+  adminBtn.style.display = isAdminLocal() ? "flex" : "none";
+}
+
+// =============================
+// DONATE
+// =============================
+window.donateNow = ()=> toast("💛 711 GROUP");
+
+// =====================================================
+// ✅ END FINAL PACK 1/3
+// Next: FINAL PACK 2/3 (Profile view, car gallery, favorites, news, profiles)
+// =====================================================
+// =====================================================
+// ✅ ULTRA FINAL PACK — PART 2/3
+// PROFILE VIEW + CAR GALLERY + FAVORITES + PROFILES + NEWS + ADMIN ULTRA
+// =====================================================
+
+// =============================
+// FAVORITES (LOCAL)
+// =============================
+function getFavorites(){
+  return safeJson(localStorage.getItem(LS.favorites)||"[]", []);
+}
+function setFavorites(arr){
+  localStorage.setItem(LS.favorites, JSON.stringify(arr||[]));
+}
+function isFavorite(id){
+  return getFavorites().includes(String(id||""));
+}
+window.toggleFavorite = (id)=>{
+  const favs = getFavorites();
+  const sid = String(id||"");
+  const idx = favs.indexOf(sid);
+  if(idx>=0) favs.splice(idx,1);
+  else favs.push(sid);
+  setFavorites(favs);
+  renderCards();
+};
+
+// =============================
+// DEVICE UPLOAD -> BACKEND -> SUPABASE
+// =============================
+async function pickFile(accept="image/*"){
+  return new Promise((resolve)=>{
+    const inp=document.createElement("input");
+    inp.type="file";
+    inp.accept=accept;
+    inp.onchange=()=>resolve(inp.files?.[0]||null);
+    inp.click();
   });
+}
+
+// backend upload endpoint should return: { ok:true, url:"https://..." }
+async function uploadFileToBackend(file){
+  const fd=new FormData();
+  fd.append("file",file);
+
+  const r=await fetch(API+"/api/upload",{ method:"POST", body: fd });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok || !j.ok) throw new Error(j?.error||"upload failed");
+  return j.url;
 }
 
 // =============================
 // PROFILE VIEW (ULTRA)
 // =============================
 async function renderProfileView(){
-  const p = getProfile();
+  const p=getProfile();
   if(!p) return;
 
-  // fetch from backend to get rating + gallery
-  let backendUser = null;
-  try{
-    const j = await apiGet(`/api/users/${encodeURIComponent(tgId())}`);
-    backendUser = j.user || null;
-  }catch(e){}
-
-  // avatar
-  const avatar = $("avatar");
+  // Avatar
+  const avatar=$("avatar");
   if(avatar){
     if(p.photo_url){
-      avatar.style.backgroundImage = `url('${p.photo_url}')`;
-      avatar.innerHTML = "";
+      avatar.style.backgroundImage=`url('${p.photo_url}')`;
+      avatar.innerHTML="";
     }else{
-      avatar.style.backgroundImage = "";
-      avatar.innerHTML = "👤";
+      avatar.style.backgroundImage="";
+      avatar.innerHTML="👤";
     }
   }
 
-  // cover (if you add element in html later)
-  const pvName = $("pv-name"); if(pvName) pvName.innerText = p.name || "—";
-  const pvPhone = $("pv-phone"); if(pvPhone) pvPhone.innerText = p.phone || "—";
-  const pvCar = $("pv-car");
-  if(pvCar){
-    const carLine = (p.role==="driver") ? `${p.carBrand||""} ${p.carNumber||""}`.trim() : "👤 Client";
-    pvCar.innerText = carLine || "—";
+  // Cover (if you add HTML cover area later)
+  const cover=$("profileCoverImg");
+  if(cover){
+    if(p.cover_url){
+      cover.style.backgroundImage = `url('${p.cover_url}')`;
+    }else{
+      cover.style.backgroundImage = "";
+    }
   }
 
-  // rating
-  const rating = backendUser ? (backendUser.rating || 0) : 0;
-  const points = 0; // points in profile can be from likes by phone if needed later
+  // Basic data
+  $("pv-name") && ($("pv-name").innerText = p.name || "—");
+  $("pv-phone") && ($("pv-phone").innerText = p.phone || "—");
 
-  $("pv-rating") && ($("pv-rating").innerText = `${Number(rating||0).toFixed(1)} ⭐`);
-  $("pv-points") && ($("pv-points").innerText = `${points} 🏆`);
+  const carLine = (p.role==="driver")
+    ? `${p.carBrand||""} ${p.carNumber||""}`.trim()
+    : "👤 Client";
+  $("pv-car") && ($("pv-car").innerText = carLine);
 
-  // my ads
+  // rating/points from backend
+  try{
+    const j = await apiGet(`/api/users/${encodeURIComponent(tgId())}`);
+    const user = j.user || {};
+    const rating = Number(user.rating||0);
+    const points = Number(user.points||0);
+    $("pv-rating") && ($("pv-rating").innerText = `${rating.toFixed(1)} ⭐`);
+    $("pv-points") && ($("pv-points").innerText = `${points} 🏆`);
+  }catch(e){
+    $("pv-rating") && ($("pv-rating").innerText = `0.0 ⭐`);
+    $("pv-points") && ($("pv-points").innerText = `0 🏆`);
+  }
+
+  // Fill edit form
+  $("ep-name") && ($("ep-name").value = p.name||"");
+  $("ep-phone") && ($("ep-phone").value = p.phone||"");
+  $("ep-car-brand") && ($("ep-car-brand").value = p.carBrand||"");
+  $("ep-car-number") && ($("ep-car-number").value = p.carNumber||"");
+
   await renderMyAds();
-
-  // car gallery render if html added later
-  // For now: show count in console
-  if(backendUser?.car_photos){
-    console.log("car photos:", backendUser.car_photos.length);
-  }
-
-  // show admin
-  checkAdminBtn();
+  await renderCarGallery();
 }
 
-window.saveProfileEdit = async ()=>{
-  const p = getProfile();
-  if(!p) return;
-
-  const np = {
-    ...p,
-    name: $("ep-name")?.value.trim() || p.name,
-    phone: $("ep-phone")?.value.trim() || p.phone,
-    carBrand: $("ep-car-brand")?.value.trim() || p.carBrand,
-    carNumber: $("ep-car-number")?.value.trim() || p.carNumber,
-  };
-
-  setProfile(np);
-  await syncProfileToBackend();
-
-  closeSheet("editProfileSheet");
-  toast("✅ Saved");
-  await renderProfileView();
-  await loadAds();
+// Hook nav(profile) properly
+const __nav_original = window.nav;
+window.nav = async (where)=>{
+  if(where==="profile"){
+    setActiveNav("profile");
+    showScreen("screen-profile-view");
+    await renderProfileView();
+    return;
+  }
+  return __nav_original(where);
 };
 
 // =============================
-// MY ADS
+// PROFILE PHOTO / COVER UPLOAD (DEVICE ONLY)
+// =============================
+window.uploadProfilePhoto = async ()=>{
+  const p=getProfile();
+  if(!p) return;
+
+  const file=await pickFile("image/*");
+  if(!file) return;
+
+  try{
+    toast("⏳ Upload...");
+    const url=await uploadFileToBackend(file);
+    const np={...p, photo_url:url};
+    setProfile(np);
+    toast("✅ Avatar saqlandi");
+    await apiPost("/api/users/upsert",{
+      telegram_id: tgId(),
+      role: np.role,
+      name: np.name,
+      phone: np.phone,
+      username: np.username||tgUsername(),
+      bio: np.bio||"",
+      photo_url: np.photo_url||"",
+      cover_url: np.cover_url||""
+    });
+    await renderProfileView();
+    await loadAds();
+  }catch(e){
+    console.log(e);
+    toast("❌ Upload error", true);
+  }
+};
+
+window.uploadCoverPhoto = async ()=>{
+  const p=getProfile();
+  if(!p) return;
+
+  const file=await pickFile("image/*");
+  if(!file) return;
+
+  try{
+    toast("⏳ Upload...");
+    const url=await uploadFileToBackend(file);
+    const np={...p, cover_url:url};
+    setProfile(np);
+    toast("✅ Cover saqlandi");
+    await apiPost("/api/users/upsert",{
+      telegram_id: tgId(),
+      role: np.role,
+      name: np.name,
+      phone: np.phone,
+      username: np.username||tgUsername(),
+      bio: np.bio||"",
+      photo_url: np.photo_url||"",
+      cover_url: np.cover_url||""
+    });
+    await renderProfileView();
+  }catch(e){
+    console.log(e);
+    toast("❌ Upload error", true);
+  }
+};
+
+// =============================
+// CAR GALLERY (DEVICE UPLOAD)
+// =============================
+window.addCarPhoto = async ()=>{
+  const p=getProfile();
+  if(!p) return;
+
+  const file=await pickFile("image/*");
+  if(!file) return;
+
+  try{
+    toast("⏳ Upload...");
+    const url=await uploadFileToBackend(file);
+
+    await apiPost("/api/car-photos/add",{
+      telegram_id: tgId(),
+      image_url: url
+    });
+
+    toast("✅ Car photo qo‘shildi");
+    await renderCarGallery();
+  }catch(e){
+    console.log(e);
+    toast("❌ Upload error", true);
+  }
+};
+
+async function renderCarGallery(){
+  const box=$("carGallery");
+  if(!box) return;
+
+  try{
+    const j=await apiGet(`/api/car-photos/${encodeURIComponent(tgId())}`);
+    const photos = Array.isArray(j.photos)?j.photos:[];
+    if(photos.length===0){
+      box.innerHTML = `<div class="muted small">🚘 Car photos yo‘q</div>`;
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="gallery-grid">
+        ${photos.map(p=>`<img src="${escapeHtml(p.image_url)}" onclick="openFullscreenImage('${escapeJs(p.image_url)}')" />`).join("")}
+      </div>
+    `;
+  }catch(e){
+    box.innerHTML = `<div class="muted small">⚠️ Gallery error</div>`;
+  }
+}
+
+// Fullscreen viewer
+window.openFullscreenImage = (url)=>{
+  const wrap=document.createElement("div");
+  wrap.style.position="fixed";
+  wrap.style.inset="0";
+  wrap.style.zIndex="99999";
+  wrap.style.background="rgba(0,0,0,.85)";
+  wrap.style.display="grid";
+  wrap.style.placeItems="center";
+  wrap.onclick=()=>wrap.remove();
+
+  wrap.innerHTML = `
+    <img src="${escapeHtml(url)}" style="max-width:92vw; max-height:88vh; border-radius:18px; border:1px solid rgba(255,255,255,.18);" />
+  `;
+  document.body.appendChild(wrap);
+};
+
+// =============================
+// MY ADS LIST + DELETE
 // =============================
 async function renderMyAds(){
-  const listEl = $("myAdsList");
+  const listEl=$("myAdsList");
   if(!listEl) return;
 
   const me = tgId();
-  const mine = ADS_CACHE.filter(a=> String(a.telegram_id||"")===String(me));
+  const mine = ADS_CACHE.filter(a=>String(a.telegram_id||"")===String(me));
 
   if(mine.length===0){
-    listEl.innerHTML = `<div class="glass card"><div class="muted">Hozircha e’lon yo‘q</div></div>`;
+    listEl.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
     return;
   }
 
-  listEl.innerHTML = "";
   mine.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+  listEl.innerHTML="";
+
   mine.forEach(ad=>{
-    const div = document.createElement("div");
-    div.className = "glass card";
-    div.innerHTML = `
+    const div=document.createElement("div");
+    div.className="glass card";
+    div.innerHTML=`
       <div class="card-body">
         <div class="route-line">
           <span class="route-pill">${escapeHtml(ad.frm||"")}</span>
@@ -1314,8 +1063,8 @@ async function renderMyAds(){
         </div>
         <div class="card-info">
           <div class="badge">💰 ${escapeHtml(String(ad.price||""))}</div>
-          <div class="badge">👥 ${escapeHtml(String(ad.seats||""))}</div>
-          <button class="chip" onclick="deleteMyAd(${ad.id})">🗑</button>
+          <div class="badge">👥 ${escapeHtml(String(ad.seats||0))}</div>
+          <button class="chip" onclick="deleteMyAd(${ad.id})">🗑 Delete</button>
         </div>
       </div>
     `;
@@ -1330,116 +1079,710 @@ window.deleteMyAd = async (adId)=>{
     await loadAds();
     await renderMyAds();
   }catch(e){
+    console.log(e);
     toast("❌ Delete error", true);
   }
 };
 
 // =============================
-// GEO TOGGLE
+// RENDER CARD UPDATE (FAVORITE HEART ICON)
 // =============================
-function initToggles(){
-  const geoToggle = $("geoToggle");
-  const notifyToggle = $("notifyToggle");
+// Patch renderCard to show favorite icon on right
+const __renderCard_original = renderCard;
+renderCard = function(ad, geo, geoEnabled){
+  const card = __renderCard_original(ad, geo, geoEnabled);
 
-  const notify = localStorage.getItem(LS.notify) === "1";
-  if(notifyToggle){
-    notifyToggle.checked = notify;
-    notifyToggle.onchange = ()=>{
-      localStorage.setItem(LS.notify, notifyToggle.checked ? "1" : "0");
-    };
+  // Replace like button content => favorite (local)
+  const fav = isFavorite(ad.telegram_id) ? "💛" : "🤍";
+  const likeBtn = card.querySelector(".like-btn");
+  if(likeBtn){
+    likeBtn.innerText = fav;
+    likeBtn.onclick = ()=>toggleFavorite(ad.telegram_id);
   }
 
-  const geoSaved = !!getGeo();
-  if(geoToggle){
-    geoToggle.checked = geoSaved;
-    geoToggle.onchange = async ()=>{
-      if(geoToggle.checked){
-        await updateLocationNow();
-      }else{
-        localStorage.removeItem(LS.geo);
-        updateGeoLine();
-        SORT_MODE = "time";
-        updateSortLine();
-        renderCards();
-      }
-    };
+  // Click -> open detail popup
+  const body = card.querySelector(".card-body");
+  if(body){
+    body.style.cursor="pointer";
+    body.onclick = ()=>openAdDetail(ad.id);
   }
 
-  updateGeoLine();
-  updateSortLine();
+  return card;
+};
+
+// =============================
+// AD DETAIL POPUP (FULL INFO)
+// =============================
+window.openAdDetail = async (adId)=>{
+  const ad = ADS_CACHE.find(x=>Number(x.id)===Number(adId));
+  if(!ad) return;
+
+  // count view
+  try{
+    await apiPost(`/api/ads/${adId}/view`, { viewer_telegram_id: tgId() });
+  }catch(e){}
+
+  const txt = `
+🚕 ${ad.name||"—"}
+📞 ${ad.phone||""}
+
+🗺 ${ad.frm||""} → ${ad.too||""}
+💰 ${ad.price||""}
+👥 ${ad.seats ?? 0}
+🏆 ${ad.points ?? 0}
+👁 ${ad.views ?? 0}
+
+🚘 ${ad.car_brand||""} ${ad.car_number||""}
+
+📝 ${ad.comment||""}
+  `.trim();
+
+  try{
+    Telegram.WebApp.showPopup({
+      title:"📌 E’lon",
+      message: txt,
+      buttons:[{type:"ok"}]
+    });
+  }catch(e){
+    alert(txt);
+  }
+
+  await loadAds();
+};
+
+// =============================
+// PROFILES DIRECTORY (Settings -> 👥 Profiles)
+// =============================
+window.openProfiles = async ()=>{
+  openSheet("profilesSheet");
+  await loadProfiles();
+};
+
+async function loadProfiles(){
+  const list=$("profilesList");
+  if(!list) return;
+
+  list.innerHTML = `<div class="muted">⏳ Loading...</div>`;
+
+  try{
+    const j = await apiGet("/api/users");
+    const users = Array.isArray(j.users)?j.users:[];
+    USERS_CACHE = users;
+
+    renderProfiles();
+  }catch(e){
+    list.innerHTML = `<div class="muted">⚠️ Profiles error</div>`;
+  }
 }
 
-window.updateLocationNow = async ()=>{
-  const geoStatus = $("geoStatus");
-  if(geoStatus) geoStatus.innerText = "…";
+window.searchProfiles = ()=>{
+  renderProfiles();
+};
 
-  if(!navigator.geolocation){
-    if(geoStatus) geoStatus.innerText = "Geolocation not supported";
+function renderProfiles(){
+  const list=$("profilesList");
+  if(!list) return;
+
+  const q=($("profilesSearch")?.value||"").trim().toLowerCase();
+  let users=[...USERS_CACHE];
+
+  if(q){
+    users = users.filter(u=>{
+      const s=`${u.name||""} ${u.phone||""} ${u.username||""} ${u.car_brand||""} ${u.car_number||""}`.toLowerCase();
+      return s.includes(q);
+    });
+  }
+
+  if(users.length===0){
+    list.innerHTML = `<div class="muted">No users</div>`;
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(
-    (pos)=>{
-      saveGeo(pos.coords.latitude, pos.coords.longitude);
-      updateGeoLine();
-      renderCards();
-      if(geoStatus){
-        geoStatus.innerText = `✅ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
-      }
-    },
-    (err)=>{
-      if(geoStatus) geoStatus.innerText = "❌ Geo error";
-      console.log(err);
-    },
-    { enableHighAccuracy:true, timeout:12000, maximumAge: 15000 }
-  );
+  list.innerHTML = "";
+  users.forEach(u=>{
+    const div=document.createElement("div");
+    div.className="glass card";
+
+    const avatarStyle = u.photo_url ? `style="background-image:url('${escapeHtml(u.photo_url)}')"` : "";
+    const online = (typeof ONLINE_SET!=="undefined" && ONLINE_SET.has(String(u.telegram_id))) ? "🟢 Online" : "⚫ Offline";
+
+    div.innerHTML = `
+      <div class="card-head">
+        <div class="card-left">
+          <div class="card-avatar" ${avatarStyle}></div>
+          <div>
+            <div class="card-name">${escapeHtml(u.name||"—")}</div>
+            <div class="card-sub">${escapeHtml(u.car_brand||"")} ${escapeHtml(u.car_number||"")}</div>
+            <div class="mini">${online}</div>
+          </div>
+        </div>
+
+        <button class="like-btn" onclick="toggleFavorite('${escapeJs(u.telegram_id)}')">
+          ${isFavorite(u.telegram_id) ? "💛" : "🤍"}
+        </button>
+      </div>
+
+      <div class="card-body">
+        <div class="card-info">
+          <div class="badge">📞 ${escapeHtml(u.phone||"")}</div>
+          <div class="badge">⭐ ${escapeHtml(String(u.rating||0))}</div>
+          <div class="badge">🏆 ${escapeHtml(String(u.points||0))}</div>
+        </div>
+
+        <div class="card-actions">
+          <button class="action call" onclick="callPhone('${escapeJs(u.phone||"")}')">Call</button>
+          <button class="action msg" onclick="msgUser('${escapeJs(u.telegram_id)}','${escapeJs(u.name||"")}')">Message</button>
+        </div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// =============================
+// NEWS SECTION (Settings -> 📰 News)
+// =============================
+window.openNews = async ()=>{
+  openSheet("newsSheet");
+  await loadNews();
 };
 
-function updateGeoLine(){
-  const geoLine = $("geoLine");
-  if(!geoLine) return;
+async function loadNews(){
+  const list=$("newsList");
+  if(!list) return;
 
-  const geo = getGeo();
-  const on = !!geo;
-  geoLine.innerHTML = on
-    ? `📍 <span>Geolokatsiya: ON</span>`
-    : `📍 <span>Geolokatsiya: OFF</span>`;
-}
+  list.innerHTML = `<div class="muted">⏳ Loading...</div>`;
 
-// =============================
-// ADMIN
-// =============================
-function checkAdminBtn(){
-  const adminBtn = document.querySelector(".admin-only");
-  if(!adminBtn) return;
-
-  if(isAdminLocal()){
-    adminBtn.style.display = "flex";
-  }else{
-    adminBtn.style.display = "none";
-  }
-}
-
-window.adminRefresh = async ()=>{
   try{
-    const j = await apiGet("/api/ads");
-    const count = Array.isArray(j.ads) ? j.ads.length : 0;
-    $("adminStats").innerText = `Ads: ${count}`;
+    const j = await apiGet("/api/news");
+    const items = Array.isArray(j.news)?j.news:[];
+    renderNews(items);
   }catch(e){
-    $("adminStats").innerText = "Error";
+    list.innerHTML = `<div class="muted">⚠️ News error</div>`;
+  }
+}
+
+function renderNews(items){
+  const list=$("newsList");
+  if(!list) return;
+
+  if(items.length===0){
+    list.innerHTML = `<div class="muted">No news</div>`;
+    return;
+  }
+
+  list.innerHTML="";
+  items.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+  items.forEach(n=>{
+    const div=document.createElement("div");
+    div.className="glass card";
+
+    div.innerHTML=`
+      <div class="card-body">
+        <div class="card-name">${escapeHtml(n.title||"—")}</div>
+        <div class="badge">${escapeHtml(n.text||"")}</div>
+        ${n.image_url ? `<img src="${escapeHtml(n.image_url)}" style="width:100%; border-radius:18px; margin-top:10px; border:1px solid rgba(255,255,255,.14)"/>` : ""}
+        <div class="mini muted" style="margin-top:8px;">📅 ${new Date((n.created_at||Date.now())*1000).toLocaleString()}</div>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// =============================
+// ADMIN ULTRA: Banner upload + News create
+// =============================
+window.adminUploadBanner = async ()=>{
+  if(!isAdminLocal()){
+    toast("❌ Admin emas", true);
+    return;
+  }
+
+  const file = await pickFile();
+  if(!file) return;
+
+  try{
+    toast("⏳ Banner upload...");
+    const url = await uploadFileToBackend(file);
+
+    await apiPost("/api/admin/banner/set", {
+      telegram_id: tgId(),
+      image_url: url
+    });
+
+    toast("✅ Banner qo‘yildi (3s)");
+  }catch(e){
+    console.log(e);
+    toast("❌ Banner error", true);
   }
 };
 
-window.adminClearAll = async ()=>{
-  toast("Admin clear (keyin qo‘shamiz)");
+window.adminCreateNews = async ()=>{
+  if(!isAdminLocal()){
+    toast("❌ Admin emas", true);
+    return;
+  }
+
+  const title = ($("newsTitle")?.value || "").trim();
+  const text  = ($("newsText")?.value || "").trim();
+
+  if(!title || !text){
+    toast("❗ Title va text shart", true);
+    return;
+  }
+
+  try{
+    let image_url = "";
+
+    // optional image upload
+    const file = await pickFile("image/*");
+    if(file){
+      toast("⏳ Upload image...");
+      image_url = await uploadFileToBackend(file);
+    }
+
+    await apiPost("/api/admin/news/create", {
+      telegram_id: tgId(),
+      title,
+      text,
+      image_url
+    });
+
+    toast("✅ News joylandi");
+    if($("newsTitle")) $("newsTitle").value="";
+    if($("newsText")) $("newsText").value="";
+    await loadNews();
+  }catch(e){
+    console.log(e);
+    toast("❌ News error", true);
+  }
+};
+
+// =====================================================
+// ✅ END FINAL PACK 2/3
+// Next: FINAL PACK 3/3 (WebSocket chat + presence + typing + voice)
+// =====================================================
+// =====================================================
+// ✅ ULTRA FINAL PACK — PART 3/3
+// WEBSOCKET CHAT + PRESENCE + TYPING + VOICE
+// =====================================================
+
+// =============================
+// WS CONFIG
+// =============================
+let WS_URL = "";
+try{
+  // If you deploy WS at same domain:
+  // wss://taxi-mini-app.onrender.com/ws
+  WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
+}catch(e){
+  WS_URL = "";
+}
+
+let ws=null;
+let wsConnected=false;
+let wsReconnectTimer=null;
+
+let CHAT_STATE = {
+  ready:false,
+  dialogs:[],         // {peer_id, peer_name, last_text, ts}
+  messagesByPeer:{},  // peer_id => [{from,to,text,ts,type,url}]
+  typingPeers:new Set()
 };
 
 // =============================
-// DONATE
+// WS CONNECT / RECONNECT
 // =============================
-window.donateNow = ()=>{
-  toast("💛 711 GROUP");
+function wsConnect(){
+  if(!WS_URL) return;
+
+  try{
+    if(ws && (ws.readyState===1 || ws.readyState===0)) return;
+
+    ws = new WebSocket(WS_URL);
+    wsConnected=false;
+
+    ws.onopen = ()=>{
+      wsConnected=true;
+      CHAT_STATE.ready=true;
+
+      // handshake
+      wsSend({
+        type:"hello",
+        user_id: tgId(),
+        name: (getProfile()?.name || tgName() || "User")
+      });
+
+      // request dialogs
+      wsSend({ type:"dialogs", user_id: tgId() });
+
+      // presence ON
+      wsSend({ type:"presence", user_id: tgId(), online:true });
+
+      updateOnlineLine();
+    };
+
+    ws.onmessage = (ev)=>{
+      let data=null;
+      try{ data=JSON.parse(ev.data); }catch(e){ return; }
+      handleWsMessage(data);
+    };
+
+    ws.onclose = ()=>{
+      wsConnected=false;
+      updateOnlineLine();
+      wsAutoReconnect();
+    };
+
+    ws.onerror = ()=>{
+      wsConnected=false;
+      updateOnlineLine();
+      wsAutoReconnect();
+    };
+  }catch(e){
+    wsConnected=false;
+    wsAutoReconnect();
+  }
+}
+
+function wsAutoReconnect(){
+  if(wsReconnectTimer) return;
+  wsReconnectTimer = setTimeout(()=>{
+    wsReconnectTimer=null;
+    wsConnect();
+  }, 2500);
+}
+
+function wsSend(obj){
+  try{
+    if(ws && ws.readyState===1){
+      ws.send(JSON.stringify(obj));
+    }
+  }catch(e){}
+}
+
+// =============================
+// HANDLE WS EVENTS
+// =============================
+function handleWsMessage(msg){
+  const ttype = msg.type;
+
+  if(ttype==="dialogs"){
+    CHAT_STATE.dialogs = Array.isArray(msg.dialogs) ? msg.dialogs : [];
+    renderChatList();
+    return;
+  }
+
+  if(ttype==="presence"){
+    // msg: {user_id, online}
+    if(msg.user_id){
+      if(msg.online) ONLINE_SET.add(String(msg.user_id));
+      else ONLINE_SET.delete(String(msg.user_id));
+
+      // update profiles list online badges
+      renderProfiles();
+      renderChatList();
+    }
+    return;
+  }
+
+  if(ttype==="typing"){
+    // msg: {from, to, typing}
+    if(msg.from){
+      if(msg.typing) CHAT_STATE.typingPeers.add(String(msg.from));
+      else CHAT_STATE.typingPeers.delete(String(msg.from));
+      renderChatHeaderTyping();
+    }
+    return;
+  }
+
+  if(ttype==="message"){
+    // msg: {from,to,text,ts,name,type,url}
+    const peerId = (String(msg.from)===String(tgId())) ? String(msg.to) : String(msg.from);
+    if(!CHAT_STATE.messagesByPeer[peerId]) CHAT_STATE.messagesByPeer[peerId]=[];
+
+    CHAT_STATE.messagesByPeer[peerId].push({
+      from:String(msg.from||""),
+      to:String(msg.to||""),
+      text: msg.text||"",
+      ts: msg.ts||Date.now(),
+      kind: msg.kind||"text",
+      url: msg.url||""
+    });
+
+    // update dialogs
+    upsertDialog(peerId, msg.name||"User", msg.text||"[media]", msg.ts||Date.now());
+
+    // render if chat open
+    if(ACTIVE_CHAT && String(ACTIVE_CHAT.peer_id)===String(peerId)){
+      renderChatMessages(peerId);
+    }
+    renderChatList();
+    return;
+  }
+}
+
+// =============================
+// DIALOG UPSERT
+// =============================
+function upsertDialog(peer_id, peer_name, last_text, ts){
+  peer_id=String(peer_id||"");
+  const idx = CHAT_STATE.dialogs.findIndex(d=>String(d.peer_id)===peer_id);
+  const item = { peer_id, peer_name, last_text, ts };
+  if(idx>=0) CHAT_STATE.dialogs[idx]=item;
+  else CHAT_STATE.dialogs.unshift(item);
+
+  CHAT_STATE.dialogs.sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+
+// =============================
+// CHAT UI OPEN/CLOSE
+// =============================
+
+// override msgUser from PART 1:
+window.msgUser = (toTelegramId, name)=>{
+  const peer_id = String(toTelegramId||"");
+  const peer_name = String(name||"User");
+
+  // open chat sheet
+  ACTIVE_CHAT = { peer_id, peer_name };
+  openSheet("chatSheet");
+  $("chatPeerName") && ($("chatPeerName").innerText = peer_name);
+
+  // load messages
+  if(!CHAT_STATE.messagesByPeer[peer_id]) CHAT_STATE.messagesByPeer[peer_id]=[];
+  renderChatMessages(peer_id);
+
+  // request history (optional)
+  wsSend({ type:"history", user_id: tgId(), peer_id });
+
+  // mark dialog exists
+  upsertDialog(peer_id, peer_name, "", Date.now());
+  renderChatList();
 };
 
-// expose search
-window.searchAds = searchAds;
+window.closeChat = ()=>{
+  ACTIVE_CHAT=null;
+  closeSheet("chatSheet");
+};
+
+// =============================
+// CHAT LIST (in settings)
+// =============================
+window.openChatList = ()=>{
+  openSheet("chatListSheet");
+  renderChatList();
+};
+
+function renderChatList(){
+  const list = $("chatList");
+  if(!list) return;
+
+  const dialogs = Array.isArray(CHAT_STATE.dialogs)?CHAT_STATE.dialogs:[];
+  if(dialogs.length===0){
+    list.innerHTML = `<div class="muted small">💬 Chat yo‘q</div>`;
+    return;
+  }
+
+  list.innerHTML = "";
+  dialogs.forEach(d=>{
+    const online = ONLINE_SET.has(String(d.peer_id)) ? "🟢" : "⚫";
+    const typing = CHAT_STATE.typingPeers.has(String(d.peer_id)) ? "… typing" : "";
+
+    const div=document.createElement("div");
+    div.className="glass card";
+    div.innerHTML=`
+      <div class="card-head">
+        <div class="card-left">
+          <div class="card-avatar">${online}</div>
+          <div>
+            <div class="card-name">${escapeHtml(d.peer_name||"User")}</div>
+            <div class="card-sub">${typing || escapeHtml(d.last_text||"")}</div>
+          </div>
+        </div>
+        <button class="chip" onclick="msgUser('${escapeJs(d.peer_id)}','${escapeJs(d.peer_name||"User")}')">Open</button>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// =============================
+// CHAT MESSAGES RENDER
+// =============================
+function renderChatMessages(peer_id){
+  const box = $("chatMessages");
+  if(!box) return;
+
+  const msgs = CHAT_STATE.messagesByPeer[String(peer_id)] || [];
+  if(msgs.length===0){
+    box.innerHTML = `<div class="muted small">💬 Hozircha xabar yo‘q</div>`;
+    return;
+  }
+
+  box.innerHTML = msgs.map(m=>{
+    const mine = String(m.from)===String(tgId());
+    const align = mine ? "right" : "left";
+    const bubbleClass = mine ? "msg-bubble mine" : "msg-bubble";
+
+    let content = "";
+    if(m.kind==="voice" && m.url){
+      content = `<audio controls src="${escapeHtml(m.url)}" style="width:220px;"></audio>`;
+    }else{
+      content = `<div>${escapeHtml(m.text||"")}</div>`;
+    }
+
+    return `
+      <div class="msg-row ${align}">
+        <div class="${bubbleClass}">
+          ${content}
+          <div class="msg-time">${new Date(m.ts).toLocaleTimeString()}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  // scroll bottom
+  setTimeout(()=>{ box.scrollTop = box.scrollHeight; }, 50);
+}
+
+function renderChatHeaderTyping(){
+  const el=$("chatTyping");
+  if(!el || !ACTIVE_CHAT) return;
+
+  const peerId=String(ACTIVE_CHAT.peer_id||"");
+  el.innerText = CHAT_STATE.typingPeers.has(peerId) ? "Typing…" : "";
+}
+
+// =============================
+// SEND TEXT MESSAGE
+// =============================
+window.sendChatMessage = ()=>{
+  if(!ACTIVE_CHAT) return;
+  const input = $("chatInput");
+  if(!input) return;
+
+  const text = (input.value||"").trim();
+  if(!text) return;
+
+  input.value="";
+
+  // optimistic add
+  const peerId=String(ACTIVE_CHAT.peer_id);
+  if(!CHAT_STATE.messagesByPeer[peerId]) CHAT_STATE.messagesByPeer[peerId]=[];
+  CHAT_STATE.messagesByPeer[peerId].push({
+    from: tgId(),
+    to: peerId,
+    text,
+    ts: Date.now(),
+    kind:"text",
+    url:""
+  });
+
+  upsertDialog(peerId, ACTIVE_CHAT.peer_name, text, Date.now());
+  renderChatMessages(peerId);
+  renderChatList();
+
+  // send to WS
+  wsSend({
+    type:"message",
+    from: tgId(),
+    to: peerId,
+    text,
+    name: getProfile()?.name || tgName() || "User",
+    kind:"text"
+  });
+};
+
+// =============================
+// TYPING INDICATOR
+// =============================
+let typingTimer=null;
+window.chatTyping = ()=>{
+  if(!ACTIVE_CHAT) return;
+  const peerId=String(ACTIVE_CHAT.peer_id);
+
+  wsSend({ type:"typing", from: tgId(), to: peerId, typing:true });
+
+  if(typingTimer) clearTimeout(typingTimer);
+  typingTimer = setTimeout(()=>{
+    wsSend({ type:"typing", from: tgId(), to: peerId, typing:false });
+  }, 800);
+};
+
+// =============================
+// VOICE MESSAGE SUPPORT
+// =============================
+window.sendVoiceMessage = async ()=>{
+  if(!ACTIVE_CHAT) return;
+
+  // For now we use file picker as "voice"
+  // Later: real audio recorder
+  const file = await pickFile("audio/*");
+  if(!file) return;
+
+  try{
+    toast("⏳ Upload voice...");
+    const url = await uploadFileToBackend(file);
+
+    const peerId=String(ACTIVE_CHAT.peer_id);
+    if(!CHAT_STATE.messagesByPeer[peerId]) CHAT_STATE.messagesByPeer[peerId]=[];
+
+    // optimistic push
+    CHAT_STATE.messagesByPeer[peerId].push({
+      from: tgId(),
+      to: peerId,
+      text: "[voice]",
+      ts: Date.now(),
+      kind:"voice",
+      url
+    });
+
+    upsertDialog(peerId, ACTIVE_CHAT.peer_name, "[voice]", Date.now());
+    renderChatMessages(peerId);
+    renderChatList();
+
+    // send over WS
+    wsSend({
+      type:"message",
+      from: tgId(),
+      to: peerId,
+      text: "[voice]",
+      name: getProfile()?.name || tgName() || "User",
+      kind:"voice",
+      url
+    });
+
+  }catch(e){
+    console.log(e);
+    toast("❌ Voice upload error", true);
+  }
+};
+
+// =============================
+// ONLINE LINE (optional UI text)
+// =============================
+function updateOnlineLine(){
+  const el=$("wsStatus");
+  if(!el) return;
+  el.innerText = wsConnected ? "🟢 WS Online" : "⚫ WS Offline";
+}
+
+// =============================
+// START WS AUTO
+// =============================
+document.addEventListener("DOMContentLoaded", ()=>{
+  // connect ws after boot
+  setTimeout(()=>wsConnect(), 1200);
+
+  // presence off when close
+  window.addEventListener("beforeunload", ()=>{
+    try{
+      wsSend({ type:"presence", user_id: tgId(), online:false });
+    }catch(e){}
+  });
+});
+
+// =====================================================
+// ✅ END ULTRA FINAL PACK 3/3
+// =====================================================
