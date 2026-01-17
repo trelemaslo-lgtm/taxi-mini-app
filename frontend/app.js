@@ -1,6 +1,7 @@
 // ====== CONFIG ======
-const API = "https://taxi-backend-5kl2.onrender.com"; // <-- backend
+const API = "https://taxi-backend-5kl2.onrender.com";
 const AUTO_DELETE_SECONDS = 60 * 60; // 60 минут
+const ADMIN_TG_ID = "123456789"; // <-- o'zingizni Telegram ID yozing
 
 // ====== I18N ======
 const DICT = {
@@ -71,7 +72,7 @@ const DICT = {
     published_ok: "✅ E’lon joylandi",
     publish_error: "❌ E’lon berishda xatolik",
     need_profile: "❗ Profilni to‘ldiring",
-    fill_required: "❗ Tочка A, B va Narx shart!",
+    fill_required: "❗ A, B va Narx shart!",
   },
 
   ru: {
@@ -98,8 +99,8 @@ const DICT = {
     sort_time: "Сортировка: по времени",
 
     create_ad: "Создать объявление",
-    point_a: "ТОЧКА A",
-    point_b: "ТОЧКА B",
+    point_a: "ТОЧКА А",
+    point_b: "ТОЧКА Б",
     ad_type: "Тип",
     type_now: "СРАЗУ ЕДУ",
     type_20: "Через 20 минут",
@@ -168,8 +169,8 @@ const DICT = {
     sort_time: "Саралаш: вақт",
 
     create_ad: "Эълон яратиш",
-    point_a: "ТОЧКА A",
-    point_b: "ТОЧКА B",
+    point_a: "TOCHKA A",
+    point_b: "TOCHKA B",
     ad_type: "Тур",
     type_now: "ҲОЗИР ЙЎЛГА ЧИҚАМАН",
     type_20: "20 дақиқада",
@@ -230,6 +231,26 @@ function applyI18n(){
   if(badge) badge.innerText = lang;
 }
 
+// ====== TELEGRAM AUTH + API FETCH ======
+function getInitData(){
+  try{
+    return (window.Telegram && Telegram.WebApp) ? (Telegram.WebApp.initData || "") : "";
+  }catch(e){ return ""; }
+}
+
+async function apiFetch(url, opts={}){
+  const o = { ...opts };
+  o.headers = o.headers || {};
+  o.headers["Content-Type"] = "application/json";
+
+  const initData = getInitData();
+  if(initData){
+    o.headers["X-TG-INITDATA"] = initData;
+  }
+
+  return fetch(url, o);
+}
+
 // ====== UI HELPERS ======
 function showScreen(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
@@ -265,7 +286,23 @@ window.sheetOutside = sheetOutside;
 let FEED_MODE = "drivers"; // drivers | clients
 let SORT_MODE = "time";    // time | distance
 
-// ====== LOCAL PROFILE ======
+// pagination state
+let ADS_OFFSET = 0;
+let ADS_LOADING = false;
+let ADS_END = false;
+
+// search + filters
+let SEARCH_QUERY = "";
+let FILTERS = {
+  priceMin: 0,
+  priceMax: 0,
+  seatsMin: 0,
+  ratingMin: 0,
+  onlyOnline: true,
+  radiusKm: 0
+};
+
+// ====== PROFILE ======
 function getProfile(){
   try{ return JSON.parse(localStorage.getItem("profile")||"null"); }catch{return null}
 }
@@ -275,7 +312,7 @@ function setProfile(p){
 
 // ====== GEO ======
 function saveGeo(lat,lng){
-  localStorage.setItem("geo", JSON.stringify({lat:lat, lng:lng, ts:Date.now()}));
+  localStorage.setItem("geo", JSON.stringify({lat,lng,ts:Date.now()}));
 }
 function getGeo(){
   try{ return JSON.parse(localStorage.getItem("geo")||"null"); }catch{return null}
@@ -291,6 +328,50 @@ function distanceKm(lat1, lon1, lat2, lon2){
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// ===== FILTERS STORE =====
+function loadFilters(){
+  try{
+    const f = JSON.parse(localStorage.getItem("filters")||"null");
+    if(f) FILTERS = {...FILTERS, ...f};
+  }catch(e){}
+}
+function storeFilters(){
+  localStorage.setItem("filters", JSON.stringify(FILTERS));
+}
+window.saveFilters = ()=>{
+  FILTERS.priceMin = parseInt(document.getElementById("fPriceMin")?.value || "0", 10) || 0;
+  FILTERS.priceMax = parseInt(document.getElementById("fPriceMax")?.value || "0", 10) || 0;
+  FILTERS.seatsMin = parseInt(document.getElementById("fSeats")?.value || "0", 10) || 0;
+  FILTERS.ratingMin = parseFloat(document.getElementById("fRating")?.value || "0") || 0;
+  FILTERS.onlyOnline = (document.getElementById("fOnline")?.value || "1") === "1";
+  FILTERS.radiusKm = parseInt(document.getElementById("fRadius")?.value || "0", 10) || 0;
+
+  storeFilters();
+  closeSheet("filterSheet");
+  loadAds(true);
+  toast("✅ Filters applied");
+};
+window.resetFilters = ()=>{
+  FILTERS = { priceMin:0, priceMax:0, seatsMin:0, ratingMin:0, onlyOnline:true, radiusKm:0 };
+  storeFilters();
+  ["fPriceMin","fPriceMax","fSeats","fRating"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = "";
+  });
+  const on = document.getElementById("fOnline");
+  if(on) on.value = "1";
+  const rad = document.getElementById("fRadius");
+  if(rad) rad.value = "0";
+
+  loadAds(true);
+  toast("♻ Reset");
+};
+window.applySearch = ()=>{
+  const q = document.getElementById("qInput")?.value || "";
+  SEARCH_QUERY = q.trim().toLowerCase();
+  loadAds(true);
+};
+
 // ====== BOOT ======
 document.addEventListener("DOMContentLoaded", async ()=>{
   try{
@@ -300,13 +381,10 @@ document.addEventListener("DOMContentLoaded", async ()=>{
     }
   }catch(e){}
 
-  window.onerror = function(msg, url, line, col, error){
-    console.log("🔥 JS ERROR:", msg, "line:", line, "col:", col, error);
-  };
+  loadFilters();
 
-  setTimeout(()=>{
-    document.getElementById("loading")?.classList.remove("active");
-  }, 900);
+  // hide loading after 900ms
+  setTimeout(()=> document.getElementById("loading")?.classList.remove("active"), 900);
 
   const lang = localStorage.getItem("lang");
   const role = localStorage.getItem("role");
@@ -325,23 +403,32 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   }else{
     showScreen("screen-home");
     nav("home");
-    await loadAds();
+    await loadAds(true);
     renderProfileView();
+    checkAdmin();
+    setTimeout(()=> loadBanner(), 1200);
   }
+
+  // infinite scroll
+  window.addEventListener("scroll", ()=>{
+    const nearBottom = (window.innerHeight + window.scrollY) > (document.body.offsetHeight - 700);
+    if(nearBottom){
+      loadAds(false);
+    }
+  });
 });
 
-// ====== LANGUAGE ======
+// ===== LANGUAGE =====
 window.setLang = (lang)=>{
   localStorage.setItem("lang", lang);
   applyI18n();
-
   const role = localStorage.getItem("role");
   const profile = getProfile();
   if(!role) showScreen("screen-role");
   else if(!profile) showScreen("screen-profile");
 };
 
-// ====== ROLE ======
+// ===== ROLE =====
 window.selectRole = (role)=>{
   localStorage.setItem("role", role);
   updateProfileUIRole();
@@ -358,20 +445,37 @@ function updateProfileUIRole(){
 
 window.goBackTo = (id)=> showScreen(id);
 
-// ====== PROFILE SAVE ======
-window.saveProfile = ()=>{
+// ===== CONTACT SHARE =====
+window.requestContact = ()=>{
+  try{
+    if(window.Telegram && Telegram.WebApp){
+      Telegram.WebApp.requestContact((ok, res)=>{
+        if(ok){
+          const phone = Telegram.WebApp.initDataUnsafe?.user?.phone_number || "";
+          if(phone){
+            const inp = document.getElementById("p-phone");
+            if(inp) inp.value = phone;
+            document.getElementById("contactHint").style.display = "block";
+          }
+        }
+      });
+      return;
+    }
+  }catch(e){}
+  toast("Telegram contact share not supported", true);
+};
+
+// ===== PROFILE SAVE =====
+window.saveProfile = async ()=>{
   const role = localStorage.getItem("role");
-  const name = (document.getElementById("p-name")?.value || "").trim();
+  const name = document.getElementById("p-name")?.value.trim();
+  const phone = document.getElementById("p-phone")?.value.trim();
+  const carBrand = document.getElementById("p-car-brand")?.value.trim();
+  const carNumber = document.getElementById("p-car-number")?.value.trim();
+  const photo = document.getElementById("p-photo")?.value.trim();
+  const bio = document.getElementById("p-bio")?.value.trim();
 
-  let phone = (document.getElementById("p-phone")?.value || "").trim();
-  phone = phone.replace(/\s+/g, "");
-
-  const carBrand = (document.getElementById("p-car-brand")?.value || "").trim();
-  const carNumber = (document.getElementById("p-car-number")?.value || "").trim();
-  const photo = (document.getElementById("p-photo")?.value || "").trim();
-  const bio = (document.getElementById("p-bio")?.value || "").trim();
-
-  if(!name || phone.length < 5){
+  if(!name || !phone){
     alert(t("need_profile"));
     return;
   }
@@ -388,18 +492,27 @@ window.saveProfile = ()=>{
 
   setProfile(profile);
 
+  // also sync backend profile
+  try{
+    await apiFetch(API + "/api/profile/save", {
+      method:"POST",
+      body: JSON.stringify(profile)
+    });
+  }catch(e){}
+
   showScreen("screen-home");
   nav("home");
-  loadAds();
+  loadAds(true);
   renderProfileView();
+  checkAdmin();
 };
 
-// ====== NAV ======
+// ===== NAV =====
 window.nav = (where)=>{
   if(where==="home"){
     setActiveNav("home");
     showScreen("screen-home");
-    loadAds();
+    loadAds(true);
   }
   if(where==="profile"){
     setActiveNav("profile");
@@ -412,15 +525,15 @@ window.nav = (where)=>{
   }
 };
 
-// ====== FEED SWITCH ======
+// ===== FEED SWITCH =====
 window.switchFeed = (mode)=>{
   FEED_MODE = mode;
   document.getElementById("tabDrivers")?.classList.toggle("active", mode==="drivers");
   document.getElementById("tabClients")?.classList.toggle("active", mode==="clients");
-  loadAds();
+  loadAds(true);
 };
 
-// ====== SORT ======
+// ===== SORT =====
 window.toggleSort = ()=>{
   const geoOn = document.getElementById("geoToggle")?.checked;
   if(geoOn){
@@ -429,7 +542,7 @@ window.toggleSort = ()=>{
     SORT_MODE = "time";
   }
   updateSortLine();
-  loadAds();
+  loadAds(true);
 };
 
 function updateSortLine(){
@@ -442,104 +555,126 @@ function updateSortLine(){
   }
 }
 
-// ====== LOAD ADS ======
-async function loadAds(){
+// ====== LOAD ADS (PAGINATION + FILTERS) ======
+async function loadAds(reset=true){
+  if(ADS_LOADING) return;
+  ADS_LOADING = true;
+
   const cards = document.getElementById("cards");
   if(!cards) return;
 
-  cards.innerHTML = `
-    <div class="skeleton glass"></div>
-    <div class="skeleton glass"></div>
-    <div class="skeleton glass"></div>
-  `;
-
-  try{
-    const controller = new AbortController();
-    const timer = setTimeout(()=>controller.abort(), 8000);
-
-    const res = await fetch(API + "/api/ads", { signal: controller.signal });
-    clearTimeout(timer);
-
-    if(!res.ok){
-      const txt = await res.text();
-      console.log("❌ /api/ads status:", res.status, txt);
-      cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ SERVER ERROR</div></div>`;
+  if(reset){
+    ADS_OFFSET = 0;
+    ADS_END = false;
+    cards.innerHTML = `
+      <div class="skeleton glass"></div>
+      <div class="skeleton glass"></div>
+      <div class="skeleton glass"></div>
+    `;
+  }else{
+    if(ADS_END){
+      ADS_LOADING = false;
       return;
     }
+    const loader = document.createElement("div");
+    loader.className = "skeleton glass";
+    loader.id = "moreLoader";
+    cards.appendChild(loader);
+  }
 
-    const data = await res.json();
-    let list = Array.isArray(data) ? data : [];
+  try{
+    const limit = 20;
+    const res = await apiFetch(API + `/api/ads?limit=${limit}&offset=${ADS_OFFSET}`);
+    const j = await res.json().catch(()=>({ok:false,items:[]}));
 
-    // feed filter by role
-    list = list.filter(a => {
-      if(FEED_MODE==="drivers") return a.role === "driver";
-      return a.role === "client";
+    const list = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
+    if(reset) cards.innerHTML = "";
+
+    document.getElementById("moreLoader")?.remove();
+
+    let filtered = list.filter(a=>{
+      if(FEED_MODE==="drivers") return a.role==="driver";
+      return a.role==="client";
     });
 
-    // route filter fallback
-    list = list.filter(a => {
-      const f = String((a.from !== undefined && a.from !== null) ? a.from : (a.pointA || "")).trim();
-      const to = String((a.to !== undefined && a.to !== null) ? a.to : (a.pointB || "")).trim();
-      return f.length > 0 && to.length > 0;
+    // SEARCH
+    if(SEARCH_QUERY){
+      filtered = filtered.filter(ad=>{
+        const name = String(ad.name||"").toLowerCase();
+        const phone = String(ad.phone||"").toLowerCase();
+        const car = `${ad.carBrand||""} ${ad.carNumber||""}`.toLowerCase();
+        const from = String(ad.from||"").toLowerCase();
+        const to = String(ad.to||"").toLowerCase();
+        return (
+          name.includes(SEARCH_QUERY) ||
+          phone.includes(SEARCH_QUERY) ||
+          car.includes(SEARCH_QUERY) ||
+          from.includes(SEARCH_QUERY) ||
+          to.includes(SEARCH_QUERY)
+        );
+      });
+    }
+
+    // FILTERS
+    filtered = filtered.filter(ad=>{
+      const price = parseInt(ad.price||"0",10) || 0;
+      const seats = parseInt(ad.seats||"0",10) || 0;
+      const rating = parseFloat(ad.rating||"0") || 0;
+
+      if(FILTERS.onlyOnline && (ad.online === 0)) return false;
+      if(FILTERS.priceMin && price < FILTERS.priceMin) return false;
+      if(FILTERS.priceMax && price > FILTERS.priceMax) return false;
+      if(FILTERS.seatsMin && seats < FILTERS.seatsMin) return false;
+      if(FILTERS.ratingMin && rating < FILTERS.ratingMin) return false;
+
+      if(FILTERS.radiusKm && FILTERS.radiusKm > 0){
+        const g = getGeo();
+        if(!g || !ad.lat || !ad.lng) return false;
+        const d = distanceKm(g.lat, g.lng, ad.lat, ad.lng);
+        if(d > FILTERS.radiusKm) return false;
+      }
+      return true;
     });
 
-    // sort
+    // sort inside page
     const geo = getGeo();
     const geoEnabled = !!geo && (document.getElementById("geoToggle")?.checked);
 
     if(SORT_MODE==="distance" && geoEnabled){
-      list.sort((a,b)=>{
+      filtered.sort((a,b)=>{
         const da = (a.lat && a.lng) ? distanceKm(geo.lat, geo.lng, a.lat, a.lng) : 99999;
         const db = (b.lat && b.lng) ? distanceKm(geo.lat, geo.lng, b.lat, b.lng) : 99999;
         return da - db;
       });
     }else{
-      list.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+      filtered.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
     }
 
-    // render
-    if(list.length===0){
+    if(filtered.length===0 && reset){
       cards.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
+      ADS_END = true;
+      ADS_LOADING = false;
       return;
     }
 
-    cards.innerHTML = "";
-    list.forEach(ad => cards.appendChild(renderCard(ad, geo)));
-
-  }catch(e){
-    console.log("loadAds ERROR:", e);
-    cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ ${t("publish_error")}</div></div>`;
-  }
-}
-async function getPoints(phone){
-  if(!phone) return 0;
-  try{
-    const r = await fetch(API + "/api/points?phone=" + encodeURIComponent(phone));
-    const j = await r.json();
-    return Number(j.likes || 0);
-  }catch(e){
-    return 0;
-  }
-}
-
-// ====== LIKE (backend real) ======
-window.likeDriver = async (phone)=>{
-  if(!phone) return;
-  try{
-    await fetch(API + "/api/like", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ phone })
+    const frag = document.createDocumentFragment();
+    filtered.forEach(ad=>{
+      frag.appendChild(renderCard(ad, geo));
     });
+    cards.appendChild(frag);
 
-    // reload cards + profile
-    loadAds();
-    renderProfileView();
+    ADS_OFFSET = j.next_offset || (ADS_OFFSET + list.length);
+    if(list.length < limit) ADS_END = true;
+
   }catch(e){
-    console.log(e);
+    document.getElementById("moreLoader")?.remove();
+    if(reset){
+      cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ ${t("publish_error")}</div></div>`;
+    }
   }
-};
 
+  ADS_LOADING = false;
+}
 
 // ====== RENDER CARD ======
 function renderCard(ad, geo){
@@ -547,9 +682,6 @@ function renderCard(ad, geo){
   card.className = "glass card";
 
   const avatarStyle = ad.photo ? `style="background-image:url('${escapeHtml(ad.photo)}')"` : "";
-  const name = ad.name || "—";
-
-  const carLine = `${ad.carBrand || ""} ${ad.carNumber || ""}`.trim();
 
   let dist = "";
   if(geo && ad.lat && ad.lng){
@@ -563,15 +695,18 @@ function renderCard(ad, geo){
     return t("type_fill");
   })();
 
-  const from = ad.from || ad.pointA || "";
-  const to = ad.to || ad.pointB || "";
+  const rating = Number(ad.rating ?? 0);
+  const reviewsCount = Number(ad.reviews_count ?? 0);
+  const points = Number(ad.points ?? 0);
+
+  const carLine = `${ad.carBrand || ""} ${ad.carNumber || ""}`.trim();
 
   card.innerHTML = `
     <div class="card-head">
       <div class="card-left">
         <div class="card-avatar" ${avatarStyle}></div>
         <div>
-          <div class="card-name">${escapeHtml(name)}</div>
+          <div class="card-name">${escapeHtml(ad.name || "—")}</div>
           <div class="card-sub">${escapeHtml(carLine)}</div>
         </div>
       </div>
@@ -581,36 +716,54 @@ function renderCard(ad, geo){
 
     <div class="card-body">
       <div class="route-line">
-        <span class="route-pill">${escapeHtml(from)}</span>
+        <span class="route-pill">${escapeHtml(ad.from || "")}</span>
         <span>→</span>
-        <span class="route-pill">${escapeHtml(to)}</span>
+        <span class="route-pill">${escapeHtml(ad.to || "")}</span>
       </div>
 
       <div class="card-info">
-       <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
-${dist ? `<div class="badge">${dist}</div>` : ""}
-<div class="badge" id="pts-${escapeHtml(ad.id || ad.phone)}">🏆 …</div>
+        <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
+        <div class="badge">👥 ${escapeHtml(String(ad.seats ?? ""))}</div>
+        <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
         ${dist ? `<div class="badge">${dist}</div>` : ""}
+        <div class="badge">🏆 ${points}</div>
+        <div class="badge">⭐ ${rating.toFixed(1)} (${reviewsCount})</div>
       </div>
 
-      <div class="badge">${escapeHtml(ad.comment || "")}</div>
+      ${ad.comment ? `<div class="badge">${escapeHtml(ad.comment || "")}</div>` : ""}
 
       <div class="card-actions">
         <button class="action call" onclick="callPhone('${escapeJs(ad.phone)}')">${t("call")}</button>
-        <button class="action msg" onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(name)}')">${t("message")}</button>
+        <button class="action msg" onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(ad.name||"")}')">${t("message")}</button>
       </div>
     </div>
   `;
-card.onclick = (e)=>{
-  // like bosilsa detail ochilmasin
-  if(e.target && e.target.classList && e.target.classList.contains("like-btn")) return;
-  openAdDetail(ad, geo);
-};
 
   return card;
 }
 
-// ====== CALL / MSG ======
+// ===== LIKE (backend) =====
+window.likeDriver = async (phone)=>{
+  if(!phone) return;
+  try{
+    const r = await apiFetch(API + "/api/like", {
+      method:"POST",
+      body: JSON.stringify({ phone })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){
+      toast(j.error || "❌ Like error", true);
+      return;
+    }
+    toast("💛 Like!");
+    loadAds(true);
+    renderProfileView();
+  }catch(e){
+    toast("❌ Network", true);
+  }
+};
+
+// ===== CALL / MSG =====
 window.callPhone = (phone)=>{
   if(!phone) return;
   window.location.href = `tel:${phone}`;
@@ -630,17 +783,11 @@ window.msgUser = (phone,name)=>{
   alert(`${name}\n${phone}`);
 };
 
-// ====== PUBLISH AD (fixed) ======
+// ===== PUBLISH AD =====
 window.publishAd = async ()=>{
   const profile = getProfile();
   if(!profile){
-    toast(t("need_profile"), true);
-    return;
-  }
-
-  if(!profile.phone || String(profile.phone).trim().length < 5){
-    toast("❗ Telefon profilga kiritilmagan!", true);
-    nav("profile");
+    alert(t("need_profile"));
     return;
   }
 
@@ -651,20 +798,15 @@ window.publishAd = async ()=>{
   const seatsEl = document.getElementById("ad-seats");
   const commentEl = document.getElementById("ad-comment");
 
-  if(!fromEl || !toEl || !typeEl || !priceEl || !seatsEl){
-    toast("❌ HTML id xato!", true);
-    return;
-  }
-
-  const from = (fromEl.value || "").trim();
-  const to = (toEl.value || "").trim();
+  const from = fromEl.value.trim();
+  const to = toEl.value.trim();
   const type = typeEl.value;
-  const price = (priceEl.value || "").trim();
-  const seats = (seatsEl.value || "").trim();
+  const price = priceEl.value.trim();
+  const seats = seatsEl.value.trim();
   const comment = (commentEl?.value || "").trim();
 
-  if(from.length < 2 || to.length < 2 || !price){
-    toast(t("fill_required"), true);
+  if(!from || !to || !price){
+    alert(t("fill_required"));
     return;
   }
 
@@ -690,68 +832,46 @@ window.publishAd = async ()=>{
     seats: seatsNum,
     comment,
 
-    lat: geo ? geo.lat : null,
-    lng: geo ? geo.lng : null
+    lat: geo?.lat || null,
+    lng: geo?.lng || null,
   };
 
   try{
-    console.log("✅ payload yuborildi:", payload);
-
-    const r = await fetch(API + "/api/ads", {
+    const r = await apiFetch(API + "/api/ads", {
       method:"POST",
-      headers:{ "Content-Type":"application/json" },
       body: JSON.stringify(payload)
     });
 
-    const text = await r.text();
-    console.log("✅ status:", r.status);
-    console.log("✅ backend javobi:", text);
+    const j = await r.json().catch(()=>({}));
 
     if(!r.ok){
-      toast("❌ Backend error: " + text, true);
-      return;
-    }
-
-    // auto tab switch by role
-    if(payload.role === "driver"){
-      FEED_MODE = "drivers";
-      document.getElementById("tabDrivers")?.classList.add("active");
-      document.getElementById("tabClients")?.classList.remove("active");
-    }else{
-      FEED_MODE = "clients";
-      document.getElementById("tabClients")?.classList.add("active");
-      document.getElementById("tabDrivers")?.classList.remove("active");
+      console.log("Publish error:", r.status, j);
+      throw new Error("Publish failed");
     }
 
     closeSheet("createAdSheet");
     toast(t("published_ok"));
     clearAdForm();
-
-    loadAds();
+    loadAds(true);
     renderMyAds();
-
   }catch(e){
-    console.log("❌ publishAd ERROR:", e);
-    toast("❌ Front error: " + (e.message || e), true);
+    toast(t("publish_error"), true);
   }
 };
 
 function clearAdForm(){
-  const ids = ["ad-from","ad-to","ad-price","ad-seats","ad-comment"];
-  ids.forEach(id=>{
+  ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.value = "";
   });
-  const typeEl = document.getElementById("ad-type");
-  if(typeEl) typeEl.value = "now";
 }
 
-// ====== SETTINGS / DONATE ======
+// ===== SETTINGS / DONATE =====
 window.donateNow = ()=>{
   toast("💛 711 GROUP");
 };
 
-// ====== TOAST ======
+// ===== TOAST =====
 function toast(msg, danger=false){
   try{
     if(window.Telegram && Telegram.WebApp){
@@ -766,8 +886,8 @@ function toast(msg, danger=false){
   alert(msg);
 }
 
-// ====== PROFILE VIEW ======
-function renderProfileView(){
+// ===== PROFILE VIEW =====
+async function renderProfileView(){
   const p = getProfile();
   if(!p) return;
 
@@ -790,10 +910,28 @@ function renderProfileView(){
     : "";
   document.getElementById("pv-car").innerText = carLine ? carLine : (p.role==="client" ? "👤 Client" : "");
 
-  // rating placeholder (later real)
-  document.getElementById("pv-points").innerText = `0 🏆`;
-  document.getElementById("pv-rating").innerText = `4.0 ⭐`;
+  // points from backend
+  try{
+    const r = await apiFetch(API + "/api/points?phone=" + encodeURIComponent(p.phone));
+    const j = await r.json().catch(()=>({}));
+    const pts = Number(j.points || 0);
+    document.getElementById("pv-points").innerText = `${pts} 🏆`;
+  }catch(e){
+    document.getElementById("pv-points").innerText = `0 🏆`;
+  }
 
+  // rating from backend
+  try{
+    const r2 = await apiFetch(API + "/api/reviews/rating?phone=" + encodeURIComponent(p.phone));
+    const s = await r2.json().catch(()=>({}));
+    const avg = Number(s.avg || 0);
+    const cnt = Number(s.count || 0);
+    document.getElementById("pv-rating").innerText = `${avg.toFixed(1)} ⭐ (${cnt})`;
+  }catch(e){
+    document.getElementById("pv-rating").innerText = `0.0 ⭐`;
+  }
+
+  // fill edit sheet inputs
   document.getElementById("ep-name").value = p.name || "";
   document.getElementById("ep-phone").value = p.phone || "";
   document.getElementById("ep-car-brand").value = p.carBrand || "";
@@ -803,28 +941,37 @@ function renderProfileView(){
   renderMyAds();
 }
 
-// ====== EDIT PROFILE SAVE ======
-window.saveProfileEdit = ()=>{
+// ===== EDIT PROFILE SAVE =====
+window.saveProfileEdit = async ()=>{
   const p = getProfile();
   if(!p) return;
 
   const np = {
     ...p,
-    name: (document.getElementById("ep-name")?.value || "").trim(),
-    phone: (document.getElementById("ep-phone")?.value || "").trim(),
-    carBrand: (document.getElementById("ep-car-brand")?.value || "").trim(),
-    carNumber: (document.getElementById("ep-car-number")?.value || "").trim(),
-    photo: (document.getElementById("ep-photo")?.value || "").trim(),
+    name: document.getElementById("ep-name").value.trim(),
+    phone: document.getElementById("ep-phone").value.trim(),
+    carBrand: document.getElementById("ep-car-brand").value.trim(),
+    carNumber: document.getElementById("ep-car-number").value.trim(),
+    photo: document.getElementById("ep-photo").value.trim(),
   };
 
   setProfile(np);
+
+  try{
+    await apiFetch(API + "/api/profile/save", {
+      method:"POST",
+      body: JSON.stringify(np)
+    });
+  }catch(e){}
+
   closeSheet("editProfileSheet");
   toast("✅ Saved");
   renderProfileView();
-  loadAds();
+  loadAds(true);
+  checkAdmin();
 };
 
-// ====== MY ADS (client-side) ======
+// ===== MY ADS =====
 async function renderMyAds(){
   const listEl = document.getElementById("myAdsList");
   if(!listEl) return;
@@ -833,8 +980,9 @@ async function renderMyAds(){
   if(!p) return;
 
   try{
-    const res = await fetch(API + "/api/ads");
-    const data = await res.json();
+    const res = await apiFetch(API + "/api/ads?limit=60&offset=0");
+    const j = await res.json().catch(()=>({ok:false,items:[]}));
+    const data = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
     const mine = (Array.isArray(data)?data:[]).filter(a => a.phone === p.phone);
 
     if(mine.length===0){
@@ -867,7 +1015,7 @@ async function renderMyAds(){
   }
 }
 
-// ====== GEO TOGGLE ======
+// ===== GEO TOGGLE =====
 function initToggles(){
   const geoToggle = document.getElementById("geoToggle");
   const notifyToggle = document.getElementById("notifyToggle");
@@ -891,7 +1039,7 @@ function initToggles(){
         updateGeoLine();
         SORT_MODE = "time";
         updateSortLine();
-        loadAds();
+        loadAds(true);
       }
     };
   }
@@ -913,7 +1061,7 @@ window.updateLocationNow = async ()=>{
     (pos)=>{
       saveGeo(pos.coords.latitude, pos.coords.longitude);
       updateGeoLine();
-      loadAds();
+      loadAds(true);
       if(geoStatus){
         geoStatus.innerText = `✅ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
       }
@@ -922,7 +1070,7 @@ window.updateLocationNow = async ()=>{
       if(geoStatus) geoStatus.innerText = "❌ Geo error";
       console.log(err);
     },
-    { enableHighAccuracy:true, timeout:10000 }
+    { enableHighAccuracy:true, timeout:12000, maximumAge: 0 }
   );
 };
 
@@ -939,101 +1087,464 @@ function updateGeoLine(){
   }
 }
 
-// ====== ADMIN (safe) ======
-window.adminRefresh = async ()=>{
+// ===== TOP DRIVERS =====
+window.loadTopDrivers = async ()=>{
+  const el = document.getElementById("topDriversList");
+  if(!el) return;
+
+  el.innerHTML = `<div class="skeleton glass"></div><div class="skeleton glass"></div>`;
+
   try{
-    const res = await fetch(API + "/api/ads");
-    const data = await res.json();
-    const count = Array.isArray(data)?data.length:0;
-    document.getElementById("adminStats").innerText = `Ads: ${count}`;
+    const r = await apiFetch(API + "/api/top/drivers");
+    const list = await r.json().catch(()=>[]);
+
+    if(!Array.isArray(list) || list.length===0){
+      el.innerHTML = `<div class="glass card"><div class="muted">No drivers</div></div>`;
+      return;
+    }
+
+    el.innerHTML = "";
+    list.forEach((d,idx)=>{
+      const div = document.createElement("div");
+      div.className = "glass card";
+      const avatarStyle = d.photo ? `style="background-image:url('${escapeHtml(d.photo)}')"` : "";
+      const carLine = `${d.carBrand||""} ${d.carNumber||""}`.trim();
+      const online = d.online ? "🟢" : "⚫";
+
+      div.innerHTML = `
+        <div class="card-head">
+          <div class="card-left">
+            <div class="card-avatar" ${avatarStyle}></div>
+            <div>
+              <div class="card-name">#${idx+1} ${escapeHtml(d.name||"—")} ${online}</div>
+              <div class="card-sub">${escapeHtml(carLine)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="card-info">
+            <div class="badge">⭐ ${escapeHtml(String(d.rating||0))} (${escapeHtml(String(d.reviews_count||0))})</div>
+            <div class="badge">🏆 ${escapeHtml(String(d.points||0))}</div>
+          </div>
+
+          <div class="card-actions">
+            <button class="action call" onclick="callPhone('${escapeJs(d.phone)}')">📞 Call</button>
+            <button class="action msg" onclick="msgUser('${escapeJs(d.phone)}','${escapeJs(d.name||"")}')">💬 Msg</button>
+          </div>
+        </div>
+      `;
+      el.appendChild(div);
+    });
+
   }catch(e){
-    document.getElementById("adminStats").innerText = "Error";
+    el.innerHTML = `<div class="glass card"><div class="muted">Network error</div></div>`;
   }
 };
 
-window.adminClearAll = async ()=>{
-  toast("Admin clear: backend kerak (keyin qo‘shamiz)");
-};
+// ===== FULLSCREEN MAP =====
+let FULL_MAP = null;
+let FULL_MARKERS = [];
 
-// ====== ESCAPE HELPERS ======
-function escapeHtml(str){
-  return String(str || "").replace(/[&<>"']/g, (s)=>({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#039;"
-  }[s]));
+function clearFullMarkers(){
+  if(!FULL_MAP) return;
+  FULL_MARKERS.forEach(m=>FULL_MAP.removeLayer(m));
+  FULL_MARKERS = [];
 }
 
-function escapeJs(str){
-  return String(str || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
-    .replace(/"/g, '\\"');
-}
-function openAdDetail(ad, geo){
-  const box = document.getElementById("adDetailContent");
-  if(!box) return;
+function driverPopupHtml(ad){
+  const car = `${ad.carBrand||""} ${ad.carNumber||""}`.trim();
+  const pts = ad.points ?? 0;
+  const rating = Number(ad.rating ?? 0).toFixed(1);
 
-  const name = ad.name || "—";
-  const carLine = `${ad.carBrand || ""} ${ad.carNumber || ""}`.trim();
-
-  const from = ad.from || ad.pointA || "—";
-  const to = ad.to || ad.pointB || "—";
-
-  let dist = "";
-  if(geo && ad.lat && ad.lng){
-    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
-    dist = `📍 ${d.toFixed(1)} km`;
-  }
-
-  const typeLabel = (function(){
-    if(ad.type==="now") return t("type_now");
-    if(ad.type==="20") return t("type_20");
-    return t("type_fill");
-  })();
-
-  const avatarStyle = ad.photo
-    ? `style="background-image:url('${escapeHtml(ad.photo)}')"`
-    : "";
-
-  box.innerHTML = `
-    <div class="detail-top">
-      <div class="detail-avatar" ${avatarStyle}></div>
-      <div>
-        <div class="detail-name">${escapeHtml(name)}</div>
-        <div class="detail-sub">${escapeHtml(carLine || (ad.role==="client" ? "👤 Client" : ""))}</div>
-        <div class="detail-sub">${escapeHtml(ad.phone || "")}</div>
+  return `
+    <div style="min-width:180px;">
+      <div style="font-weight:900;">${escapeHtml(ad.name||"—")}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:2px;">
+        ${escapeHtml(car)}
+      </div>
+      <div style="margin-top:6px;font-size:12px;">
+        ⭐ ${rating} • 🏆 ${pts}
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px;">
+        <button style="flex:1;padding:8px;border:none;border-radius:12px;font-weight:900;background:#f6c300;color:#111;"
+          onclick="callPhone('${escapeJs(ad.phone)}')">Call</button>
+        <button style="flex:1;padding:8px;border:1px solid rgba(0,0,0,.2);border-radius:12px;font-weight:900;background:#fff;"
+          onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(ad.name||"")}')">Msg</button>
       </div>
     </div>
-
-    <div class="detail-route">
-      <span class="route-pill">📍 ${escapeHtml(from)}</span>
-      <span>→</span>
-      <span class="route-pill">📍 ${escapeHtml(to)}</span>
-    </div>
-
-    <div class="detail-grid">
-      <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
-      <div class="badge">👥 ${escapeHtml(String(ad.seats ?? ""))}</div>
-      <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
-      ${dist ? `<div class="badge">${dist}</div>` : ""}
-    </div>
-
-    <div class="badge">${escapeHtml(ad.comment || "")}</div>
   `;
+}
 
-  // buttons
-  const callBtn = document.getElementById("detailCallBtn");
-  const msgBtn = document.getElementById("detailMsgBtn");
+window.openFullMap = async ()=>{
+  showScreen("screen-map-full");
+  try{ Telegram.WebApp.expand(); }catch(e){}
+  try{ Telegram.WebApp.disableVerticalSwipes(); }catch(e){}
 
-  if(callBtn){
-    callBtn.onclick = ()=> callPhone(ad.phone || "");
+  const geo = getGeo();
+  const center = geo ? [geo.lat, geo.lng] : [41.3111, 69.2797];
+
+  if(!FULL_MAP){
+    FULL_MAP = L.map("mapFullBox", { zoomControl:false }).setView(center, geo ? 13 : 11);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(FULL_MAP);
+
+    setTimeout(()=>FULL_MAP.invalidateSize(), 300);
+  }else{
+    setTimeout(()=>FULL_MAP.invalidateSize(), 300);
+    FULL_MAP.setView(center, geo ? 13 : 11);
   }
-  if(msgBtn){
-    msgBtn.onclick = ()=> msgUser(ad.phone || "", name);
+
+  await renderFullMapDrivers();
+};
+
+window.closeFullMap = ()=>{
+  nav("home");
+  setTimeout(()=>{
+    try{ if(FULL_MAP) FULL_MAP.invalidateSize(); }catch(e){}
+  }, 200);
+};
+
+async function renderFullMapDrivers(){
+  if(!FULL_MAP) return;
+  clearFullMarkers();
+
+  const g = getGeo();
+  if(g){
+    const me = L.circleMarker([g.lat, g.lng], { radius: 9 }).addTo(FULL_MAP);
+    me.bindPopup("📍 You");
+    FULL_MARKERS.push(me);
+
+    if(FILTERS?.radiusKm && FILTERS.radiusKm > 0){
+      const circle = L.circle([g.lat, g.lng], { radius: FILTERS.radiusKm * 1000 }).addTo(FULL_MAP);
+      FULL_MARKERS.push(circle);
+    }
   }
 
-  openSheet("adDetailSheet");
+  try{
+    const r = await apiFetch(API + "/api/ads?limit=60&offset=0");
+    const j = await r.json().catch(()=>({ok:false,items:[]}));
+    const list = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
+    let drivers = list.filter(a => a.role==="driver" && a.online !== 0);
+    drivers = drivers.filter(d => d.lat && d.lng);
+
+    if(FILTERS?.radiusKm && FILTERS.radiusKm > 0){
+      const geo = getGeo();
+      if(geo){
+        drivers = drivers.filter(d=>{
+          const dist = distanceKm(geo.lat, geo.lng, d.lat, d.lng);
+          return dist <= FILTERS.radiusKm;
+        });
+      }
+    }
+
+    drivers.forEach(ad=>{
+      const m = L.marker([ad.lat, ad.lng]).addTo(FULL_MAP);
+      m.bindPopup(driverPopupHtml(ad));
+      FULL_MARKERS.push(m);
+    });
+
+  }catch(e){
+    toast("❌ Map error", true);
+  }
+}
+
+// ===== ADMIN =====
+function isAdmin(){
+  try{
+    const id = String(Telegram.WebApp.initDataUnsafe?.user?.id || "");
+    return id && id === String(ADMIN_TG_ID);
+  }catch(e){
+    return false;
+  }
+}
+
+function checkAdmin(){
+  const adminBtn = document.querySelector(".admin-only");
+  if(!adminBtn) return;
+  adminBtn.style.display = isAdmin() ? "flex" : "none";
+}
+
+window.adminRefresh = async ()=>{
+  const el = document.getElementById("adminStats");
+  if(el) el.innerText = "Loading...";
+
+  try{
+    const r = await apiFetch(API + "/api/ads?limit=60&offset=0");
+    const j = await r.json().catch(()=>({ok:false,items:[]}));
+    const ads = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
+    const count = Array.isArray(ads)?ads.length:0;
+    if(el) el.innerText = `Ads: ${count}`;
+  }catch(e){
+    if(el) el.innerText = "Error";
+  }
+};
+
+window.adminLoadProfiles = async ()=>{
+  if(!isAdmin()){
+    toast("Not admin", true);
+    return;
+  }
+
+  const box = document.getElementById("adminUsers");
+  if(!box) return;
+
+  box.innerHTML = `<div class="skeleton glass"></div><div class="skeleton glass"></div>`;
+
+  try{
+    const r = await apiFetch(API + "/api/admin/profiles");
+    const j = await r.json().catch(()=>({}));
+
+    if(!r.ok || !j.ok){
+      box.innerHTML = `<div class="glass card"><div class="muted">Admin error</div></div>`;
+      return;
+    }
+
+    const items = Array.isArray(j.items)?j.items:[];
+    if(items.length===0){
+      box.innerHTML = `<div class="glass card"><div class="muted">No users</div></div>`;
+      return;
+    }
+
+    box.innerHTML = "";
+    items.forEach(u=>{
+      const div = document.createElement("div");
+      div.className = "glass card";
+
+      const carLine = `${u.carBrand||""} ${u.carNumber||""}`.trim();
+      const status = u.online ? "🟢" : "⚫";
+      const ver = u.verified ? "✅ Verified" : "❌ Not verified";
+      const ban = u.banned ? "⛔ BANNED" : "✅ Active";
+
+      div.innerHTML = `
+        <div class="card-body">
+          <div class="card-name">${escapeHtml(u.name||"—")} ${status}</div>
+          <div class="muted small">${escapeHtml(u.role)} • ${escapeHtml(u.phone)}</div>
+          ${carLine ? `<div class="badge" style="margin-top:6px;">🚘 ${escapeHtml(carLine)}</div>` : ""}
+
+          <div class="card-info" style="margin-top:8px;">
+            <div class="badge">${ver}</div>
+            <div class="badge">${ban}</div>
+          </div>
+
+          <div class="card-actions" style="margin-top:10px;">
+            <button class="action call" onclick="adminToggleVerify('${escapeJs(u.phone)}', ${u.verified?0:1})">
+              ${u.verified ? "❌ Unverify" : "✅ Verify"}
+            </button>
+            <button class="action msg" onclick="adminToggleBan('${escapeJs(u.phone)}', ${u.banned?0:1})">
+              ${u.banned ? "✅ Unban" : "⛔ Ban"}
+            </button>
+          </div>
+        </div>
+      `;
+      box.appendChild(div);
+    });
+
+  }catch(e){
+    box.innerHTML = `<div class="glass card"><div class="muted">Network</div></div>`;
+  }
+};
+
+window.adminToggleVerify = async (phone, v)=>{
+  try{
+    const r = await apiFetch(API + "/api/admin/profile/verify", {
+      method:"POST",
+      body: JSON.stringify({ phone, verified: !!v })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){
+      toast("❌ Error", true);
+      return;
+    }
+    toast("✅ Updated");
+    adminLoadProfiles();
+  }catch(e){
+    toast("❌ Network", true);
+  }
+};
+
+window.adminToggleBan = async (phone, v)=>{
+  try{
+    const r = await apiFetch(API + "/api/admin/profile/ban", {
+      method:"POST",
+      body: JSON.stringify({ phone, banned: !!v })
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){
+      toast("❌ Error", true);
+      return;
+    }
+    toast("✅ Updated");
+    adminLoadProfiles();
+  }catch(e){
+    toast("❌ Network", true);
+  }
+};
+
+window.adminClearAds = async ()=>{
+  toast("✅ Cleanup auto");
+};
+
+// ===== ADMIN BANNER =====
+window.adminSetBanner = async ()=>{
+  if(!isAdmin()){
+    toast("Not admin", true);
+    return;
+  }
+
+  const title = document.getElementById("banTitle")?.value.trim();
+  const text  = document.getElementById("banText")?.value.trim();
+  const image = document.getElementById("banImage")?.value.trim();
+  const link  = document.getElementById("banLink")?.value.trim();
+
+  try{
+    const r = await apiFetch(API + "/api/admin/banner/set", {
+      method:"POST",
+      body: JSON.stringify({ title, text, image, link, active:1 })
+    });
+
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){
+      toast("❌ Banner error", true);
+      console.log(j);
+      return;
+    }
+
+    toast("✅ Banner published");
+  }catch(e){
+    toast("❌ Network", true);
+  }
+};
+
+window.adminBannerOff = async ()=>{
+  if(!isAdmin()){
+    toast("Not admin", true);
+    return;
+  }
+  try{
+    const r = await apiFetch(API + "/api/admin/banner/off", { method:"POST" });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.ok){
+      toast("❌ Error", true);
+      return;
+    }
+    toast("🛑 Banner OFF");
+  }catch(e){
+    toast("❌ Network", true);
+  }
+};
+
+// ===== BANNER (USER) =====
+let CURRENT_BANNER = null;
+
+function bannerHiddenToday(){
+  const until = parseInt(localStorage.getItem("banner_hide_until") || "0", 10) || 0;
+  return Date.now() < until;
+}
+
+window.hideBannerToday = ()=>{
+  localStorage.setItem("banner_hide_until", String(Date.now() + 24*60*60*1000));
+  closeSheet("bannerModal");
+  toast("✅ Bugun banner ko‘rsatilmaydi");
+};
+
+window.openBannerLink = ()=>{
+  if(!CURRENT_BANNER) return;
+  const link = (CURRENT_BANNER.link || "").trim();
+  if(!link){
+    toast("Link yo‘q", true);
+    return;
+  }
+  try{
+    window.open(link, "_blank");
+  }catch(e){
+    toast("Link ochilmadi", true);
+  }
+};
+
+async function loadBanner(){
+  try{
+    const r = await apiFetch(API + "/api/banner");
+    const j = await r.json().catch(()=>({}));
+    if(!j.ok || !j.banner) return;
+
+    const b = j.banner;
+    if(!b || b.active !== 1) return;
+    if(bannerHiddenToday()) return;
+
+    CURRENT_BANNER = b;
+
+    const el = document.getElementById("bannerBody");
+    if(el){
+      el.innerHTML = `
+        ${b.image ? `<div class="banner-img"><img src="${escapeHtml(b.image)}" /></div>` : ""}
+        <div class="banner-title">${escapeHtml(b.title || "🔥 Promo")}</div>
+        <div class="banner-text">${escapeHtml(b.text || "")}</div>
+      `;
+    }
+
+    openSheet("bannerModal");
+  }catch(e){
+    console.log("banner err", e);
+  }
+}
+
+// ===== ORDERS LIST (simple) =====
+window.loadMyOrders = async ()=>{
+  const p = getProfile();
+  const listEl = document.getElementById("ordersList");
+  if(!p || !listEl) return;
+
+  listEl.innerHTML = `<div class="skeleton glass"></div><div class="skeleton glass"></div>`;
+
+  try{
+    const r = await apiFetch(API + "/api/orders/my?phone=" + encodeURIComponent(p.phone));
+    const j = await r.json().catch(()=>({ok:false,items:[]}));
+
+    if(!r.ok || !j.ok){
+      listEl.innerHTML = `<div class="glass card"><div class="muted">No orders</div></div>`;
+      return;
+    }
+
+    const items = Array.isArray(j.items)?j.items:[];
+    if(items.length===0){
+      listEl.innerHTML = `<div class="glass card"><div class="muted">No orders</div></div>`;
+      return;
+    }
+
+    listEl.innerHTML = "";
+    items.forEach(o=>{
+      const div = document.createElement("div");
+      div.className = "glass card";
+      div.innerHTML = `
+        <div class="card-body">
+          <div class="route-line">
+            <span class="route-pill">${escapeHtml(o.from||"")}</span>
+            <span>→</span>
+            <span class="route-pill">${escapeHtml(o.to||"")}</span>
+          </div>
+          <div class="card-info">
+            <div class="badge">💰 ${escapeHtml(String(o.price||""))}</div>
+            <div class="badge">🟡 ${escapeHtml(String(o.status||""))}</div>
+          </div>
+        </div>
+      `;
+      listEl.appendChild(div);
+    });
+
+  }catch(e){
+    listEl.innerHTML = `<div class="glass card"><div class="muted">Network error</div></div>`;
+  }
+};
+
+// ===== ESCAPE HELPERS =====
+function escapeHtml(str){
+  return String(str || "").replace(/[&<>"']/g, s=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[s]));
+}
+function escapeJs(str){
+  return String(str||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 }
