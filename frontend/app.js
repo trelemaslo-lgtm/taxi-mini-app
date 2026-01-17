@@ -1,7 +1,13 @@
+// =============================
+// 711 TAXI — ULTRA FRONTEND v2.5+
+// Works with: ULTRA Flask backend + WS server
+// =============================
+
 // ====== CONFIG ======
 const API = "https://taxi-backend-5kl2.onrender.com";
-const AUTO_DELETE_SECONDS = 60 * 60; // 60 минут
-const ADMIN_TG_ID = "6813692852"; // <-- o'zingizni Telegram ID yozing
+const WS_HTTP = "https://taxi-mini-app.onrender.com"; // your WS service
+const ADMIN_TELEGRAM_ID = "6813692852";
+const AUTO_DELETE_SECONDS = 60 * 60; // (old) optional
 
 // ====== I18N ======
 const DICT = {
@@ -71,8 +77,8 @@ const DICT = {
     message: "Yozish",
     published_ok: "✅ E’lon joylandi",
     publish_error: "❌ E’lon berishda xatolik",
-    need_profile: "❗ Profilni to‘ldiring",
-    fill_required: "❗ A, B va Narx shart!",
+    need_profile: "❗️ Profilni to‘ldiring",
+    fill_required: "❗️ A, B va Narx shart!",
   },
 
   ru: {
@@ -135,14 +141,13 @@ const DICT = {
     geo_enable: "Включить гео",
     geo_update: "Обновить местоположение",
     geo_hint: "Если гео включено — сортируем по дистанции.",
-
     no_ads: "Пока нет объявлений",
     call: "Позвонить",
     message: "Написать",
     published_ok: "✅ Объявление опубликовано",
     publish_error: "❌ Ошибка публикации",
-    need_profile: "❗ Заполните профиль",
-    fill_required: "❗ Точка A, B и цена обязательны!",
+    need_profile: "❗️ Заполните профиль",
+    fill_required: "❗️ Точка A, B и цена обязательны!",
   },
 
   uzk: {
@@ -211,44 +216,45 @@ const DICT = {
     message: "Ёзиш",
     published_ok: "✅ Эълон жойланди",
     publish_error: "❌ Эълонда хатолик",
-    need_profile: "❗ Профилни тўлдиринг",
-    fill_required: "❗ A, B ва нарх шарт!",
+    need_profile: "❗️ Профилни тўлдиринг",
+    fill_required: "❗️ A, B ва нарх шарт!",
   }
 };
 
-function t(key){
-  const lang = localStorage.getItem("lang") || "uz";
-  return (DICT[lang] && DICT[lang][key]) ? DICT[lang][key] : (DICT["uz"][key] || key);
+// ========= SAFE HELPERS =========
+const $ = (id) => document.getElementById(id);
+
+function safeJson(v, fallback){
+  try { return JSON.parse(v); } catch { return fallback; }
 }
 
-function applyI18n(){
-  document.querySelectorAll("[data-i18n]").forEach(el=>{
-    const k = el.getAttribute("data-i18n");
-    el.innerText = t(k);
-  });
-  const lang = localStorage.getItem("lang") || "uz";
-  const badge = document.getElementById("langBadge");
-  if(badge) badge.innerText = lang;
+function escapeHtml(str){
+  return String(str || "").replace(/[&<>"']/g, s=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[s]));
+}
+function escapeJs(str){
+  return String(str||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 }
 
-// ====== TELEGRAM AUTH + API FETCH ======
-function getInitData(){
+// ====== TELEGRAM SAFE ======
+function tgUser(){
   try{
-    return (window.Telegram && Telegram.WebApp) ? (Telegram.WebApp.initData || "") : "";
-  }catch(e){ return ""; }
+    return Telegram?.WebApp?.initDataUnsafe?.user || null;
+  }catch(e){ return null; }
 }
-
-async function apiFetch(url, opts={}){
-  const o = { ...opts };
-  o.headers = o.headers || {};
-  o.headers["Content-Type"] = "application/json";
-
-  const initData = getInitData();
-  if(initData){
-    o.headers["X-TG-INITDATA"] = initData;
-  }
-
-  return fetch(url, o);
+function tgId(){
+  return String(tgUser()?.id || "");
+}
+function tgName(){
+  const u = tgUser();
+  if(!u) return "";
+  return (u.first_name || "") + (u.last_name ? (" " + u.last_name) : "");
+}
+function tgUsername(){
+  const u = tgUser();
+  if(!u) return "";
+  return u.username ? ("@" + u.username) : "";
 }
 
 // ====== UI HELPERS ======
@@ -263,16 +269,16 @@ function setActiveNav(name){
     const b = document.getElementById(id);
     if(b) b.classList.remove("active");
   });
-  if(name==="home") document.getElementById("navHome")?.classList.add("active");
-  if(name==="profile") document.getElementById("navProfile")?.classList.add("active");
+  if(name==="home") $("navHome")?.classList.add("active");
+  if(name==="profile") $("navProfile")?.classList.add("active");
 }
 
 function openSheet(id){
-  const el = document.getElementById(id);
+  const el = $(id);
   if(el) el.classList.add("open");
 }
 function closeSheet(id){
-  const el = document.getElementById(id);
+  const el = $(id);
   if(el) el.classList.remove("open");
 }
 function sheetOutside(e,id){
@@ -282,641 +288,6 @@ window.openSheet = openSheet;
 window.closeSheet = closeSheet;
 window.sheetOutside = sheetOutside;
 
-// ====== STATE ======
-let FEED_MODE = "drivers"; // drivers | clients
-let SORT_MODE = "time";    // time | distance
-
-// pagination state
-let ADS_OFFSET = 0;
-let ADS_LOADING = false;
-let ADS_END = false;
-
-// search + filters
-let SEARCH_QUERY = "";
-let FILTERS = {
-  priceMin: 0,
-  priceMax: 0,
-  seatsMin: 0,
-  ratingMin: 0,
-  onlyOnline: true,
-  radiusKm: 0
-};
-
-// ====== PROFILE ======
-function getProfile(){
-  try{ return JSON.parse(localStorage.getItem("profile")||"null"); }catch{return null}
-}
-function setProfile(p){
-  localStorage.setItem("profile", JSON.stringify(p));
-}
-
-// ====== GEO ======
-function saveGeo(lat,lng){
-  localStorage.setItem("geo", JSON.stringify({lat,lng,ts:Date.now()}));
-}
-function getGeo(){
-  try{ return JSON.parse(localStorage.getItem("geo")||"null"); }catch{return null}
-}
-function distanceKm(lat1, lon1, lat2, lon2){
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
-    Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-// ===== FILTERS STORE =====
-function loadFilters(){
-  try{
-    const f = JSON.parse(localStorage.getItem("filters")||"null");
-    if(f) FILTERS = {...FILTERS, ...f};
-  }catch(e){}
-}
-function storeFilters(){
-  localStorage.setItem("filters", JSON.stringify(FILTERS));
-}
-window.saveFilters = ()=>{
-  FILTERS.priceMin = parseInt(document.getElementById("fPriceMin")?.value || "0", 10) || 0;
-  FILTERS.priceMax = parseInt(document.getElementById("fPriceMax")?.value || "0", 10) || 0;
-  FILTERS.seatsMin = parseInt(document.getElementById("fSeats")?.value || "0", 10) || 0;
-  FILTERS.ratingMin = parseFloat(document.getElementById("fRating")?.value || "0") || 0;
-  FILTERS.onlyOnline = (document.getElementById("fOnline")?.value || "1") === "1";
-  FILTERS.radiusKm = parseInt(document.getElementById("fRadius")?.value || "0", 10) || 0;
-
-  storeFilters();
-  closeSheet("filterSheet");
-  loadAds(true);
-  toast("✅ Filters applied");
-};
-window.resetFilters = ()=>{
-  FILTERS = { priceMin:0, priceMax:0, seatsMin:0, ratingMin:0, onlyOnline:true, radiusKm:0 };
-  storeFilters();
-  ["fPriceMin","fPriceMax","fSeats","fRating"].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.value = "";
-  });
-  const on = document.getElementById("fOnline");
-  if(on) on.value = "1";
-  const rad = document.getElementById("fRadius");
-  if(rad) rad.value = "0";
-
-  loadAds(true);
-  toast("♻ Reset");
-};
-window.applySearch = ()=>{
-  const q = document.getElementById("qInput")?.value || "";
-  SEARCH_QUERY = q.trim().toLowerCase();
-  loadAds(true);
-};
-
-// ====== BOOT ======
-document.addEventListener("DOMContentLoaded", async ()=>{
-  try{
-    if(window.Telegram && Telegram.WebApp){
-      Telegram.WebApp.ready();
-      Telegram.WebApp.expand();
-    }
-  }catch(e){}
-
-  loadFilters();
-
-  // hide loading after 900ms
-  setTimeout(()=> document.getElementById("loading")?.classList.remove("active"), 900);
-
-  const lang = localStorage.getItem("lang");
-  const role = localStorage.getItem("role");
-  const profile = getProfile();
-
-  applyI18n();
-  initToggles();
-
-  if(!lang){
-    showScreen("screen-language");
-  }else if(!role){
-    showScreen("screen-role");
-  }else if(!profile){
-    showScreen("screen-profile");
-    updateProfileUIRole();
-  }else{
-    showScreen("screen-home");
-    nav("home");
-    await loadAds(true);
-    renderProfileView();
-    checkAdmin();
-    setTimeout(()=> loadBanner(), 1200);
-  }
-
-  // infinite scroll
-  window.addEventListener("scroll", ()=>{
-    const nearBottom = (window.innerHeight + window.scrollY) > (document.body.offsetHeight - 700);
-    if(nearBottom){
-      loadAds(false);
-    }
-  });
-});
-
-// ===== LANGUAGE =====
-window.setLang = (lang)=>{
-  localStorage.setItem("lang", lang);
-  applyI18n();
-  const role = localStorage.getItem("role");
-  const profile = getProfile();
-  if(!role) showScreen("screen-role");
-  else if(!profile) showScreen("screen-profile");
-};
-
-// ===== ROLE =====
-window.selectRole = (role)=>{
-  localStorage.setItem("role", role);
-  updateProfileUIRole();
-  showScreen("screen-profile");
-};
-
-function updateProfileUIRole(){
-  const role = localStorage.getItem("role");
-  const driverExtra = document.getElementById("driver-extra");
-  if(driverExtra){
-    driverExtra.style.display = role==="driver" ? "block" : "none";
-  }
-}
-
-window.goBackTo = (id)=> showScreen(id);
-
-// ===== CONTACT SHARE =====
-window.requestContact = ()=>{
-  try{
-    if(window.Telegram && Telegram.WebApp){
-      Telegram.WebApp.requestContact((ok, res)=>{
-        if(ok){
-          const phone = Telegram.WebApp.initDataUnsafe?.user?.phone_number || "";
-          if(phone){
-            const inp = document.getElementById("p-phone");
-            if(inp) inp.value = phone;
-            document.getElementById("contactHint").style.display = "block";
-          }
-        }
-      });
-      return;
-    }
-  }catch(e){}
-  toast("Telegram contact share not supported", true);
-};
-
-// ===== PROFILE SAVE =====
-window.saveProfile = async ()=>{
-  const role = localStorage.getItem("role");
-  const name = document.getElementById("p-name")?.value.trim();
-  const phone = document.getElementById("p-phone")?.value.trim();
-  const carBrand = document.getElementById("p-car-brand")?.value.trim();
-  const carNumber = document.getElementById("p-car-number")?.value.trim();
-  const photo = document.getElementById("p-photo")?.value.trim();
-  const bio = document.getElementById("p-bio")?.value.trim();
-
-  if(!name || !phone){
-    alert(t("need_profile"));
-    return;
-  }
-
-  const profile = {
-    role,
-    name,
-    phone,
-    carBrand: role==="driver" ? (carBrand||"") : "",
-    carNumber: role==="driver" ? (carNumber||"") : "",
-    photo: photo || "",
-    bio: bio || "",
-  };
-
-  setProfile(profile);
-
-  // also sync backend profile
-  try{
-    await apiFetch(API + "/api/profile/save", {
-      method:"POST",
-      body: JSON.stringify(profile)
-    });
-  }catch(e){}
-
-  showScreen("screen-home");
-  nav("home");
-  loadAds(true);
-  renderProfileView();
-  checkAdmin();
-};
-
-// ===== NAV =====
-window.nav = (where)=>{
-  if(where==="home"){
-    setActiveNav("home");
-    showScreen("screen-home");
-    loadAds(true);
-  }
-  if(where==="profile"){
-    setActiveNav("profile");
-    showScreen("screen-profile-view");
-    renderProfileView();
-  }
-  if(where==="admin"){
-    showScreen("screen-admin");
-    adminRefresh();
-  }
-};
-
-// ===== FEED SWITCH =====
-window.switchFeed = (mode)=>{
-  FEED_MODE = mode;
-  document.getElementById("tabDrivers")?.classList.toggle("active", mode==="drivers");
-  document.getElementById("tabClients")?.classList.toggle("active", mode==="clients");
-  loadAds(true);
-};
-
-// ===== SORT =====
-window.toggleSort = ()=>{
-  const geoOn = document.getElementById("geoToggle")?.checked;
-  if(geoOn){
-    SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
-  }else{
-    SORT_MODE = "time";
-  }
-  updateSortLine();
-  loadAds(true);
-};
-
-function updateSortLine(){
-  const el = document.getElementById("sortLine");
-  if(!el) return;
-  if(SORT_MODE==="distance"){
-    el.innerHTML = `↕️ <span>${localStorage.getItem("lang")==="ru" ? "Сортировка: дистанция" : "Saralash: masofa"}</span>`;
-  }else{
-    el.innerHTML = `↕️ <span data-i18n="sort_time">${t("sort_time")}</span>`;
-  }
-}
-
-// ====== LOAD ADS (PAGINATION + FILTERS) ======
-async function loadAds(reset=true){
-  if(ADS_LOADING) return;
-  ADS_LOADING = true;
-
-  const cards = document.getElementById("cards");
-  if(!cards) return;
-
-  if(reset){
-    ADS_OFFSET = 0;
-    ADS_END = false;
-    cards.innerHTML = `
-      <div class="skeleton glass"></div>
-      <div class="skeleton glass"></div>
-      <div class="skeleton glass"></div>
-    `;
-  }else{
-    if(ADS_END){
-      ADS_LOADING = false;
-      return;
-    }
-    const loader = document.createElement("div");
-    loader.className = "skeleton glass";
-    loader.id = "moreLoader";
-    cards.appendChild(loader);
-  }
-
-  try{
-    const limit = 20;
-    const res = await apiFetch(API + `/api/ads?limit=${limit}&offset=${ADS_OFFSET}`);
-    const j = await res.json().catch(()=>({ok:false,items:[]}));
-
-    const list = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
-    if(reset) cards.innerHTML = "";
-
-    document.getElementById("moreLoader")?.remove();
-
-    let filtered = list.filter(a=>{
-      if(FEED_MODE==="drivers") return a.role==="driver";
-      return a.role==="client";
-    });
-
-    // SEARCH
-    if(SEARCH_QUERY){
-      filtered = filtered.filter(ad=>{
-        const name = String(ad.name||"").toLowerCase();
-        const phone = String(ad.phone||"").toLowerCase();
-        const car = `${ad.carBrand||""} ${ad.carNumber||""}`.toLowerCase();
-        const from = String(ad.from||"").toLowerCase();
-        const to = String(ad.to||"").toLowerCase();
-        return (
-          name.includes(SEARCH_QUERY) ||
-          phone.includes(SEARCH_QUERY) ||
-          car.includes(SEARCH_QUERY) ||
-          from.includes(SEARCH_QUERY) ||
-          to.includes(SEARCH_QUERY)
-        );
-      });
-    }
-
-    // FILTERS
-    filtered = filtered.filter(ad=>{
-      const price = parseInt(ad.price||"0",10) || 0;
-      const seats = parseInt(ad.seats||"0",10) || 0;
-      const rating = parseFloat(ad.rating||"0") || 0;
-
-      if(FILTERS.onlyOnline && (ad.online === 0)) return false;
-      if(FILTERS.priceMin && price < FILTERS.priceMin) return false;
-      if(FILTERS.priceMax && price > FILTERS.priceMax) return false;
-      if(FILTERS.seatsMin && seats < FILTERS.seatsMin) return false;
-      if(FILTERS.ratingMin && rating < FILTERS.ratingMin) return false;
-
-      if(FILTERS.radiusKm && FILTERS.radiusKm > 0){
-        const g = getGeo();
-        if(!g || !ad.lat || !ad.lng) return false;
-        const d = distanceKm(g.lat, g.lng, ad.lat, ad.lng);
-        if(d > FILTERS.radiusKm) return false;
-      }
-      return true;
-    });
-
-    // sort inside page
-    const geo = getGeo();
-    const geoEnabled = !!geo && (document.getElementById("geoToggle")?.checked);
-
-    if(SORT_MODE==="distance" && geoEnabled){
-      filtered.sort((a,b)=>{
-        const da = (a.lat && a.lng) ? distanceKm(geo.lat, geo.lng, a.lat, a.lng) : 99999;
-        const db = (b.lat && b.lng) ? distanceKm(geo.lat, geo.lng, b.lat, b.lng) : 99999;
-        return da - db;
-      });
-    }else{
-      filtered.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
-    }
-
-    if(filtered.length===0 && reset){
-      cards.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
-      ADS_END = true;
-      ADS_LOADING = false;
-      return;
-    }
-
-    const frag = document.createDocumentFragment();
-    filtered.forEach(ad=>{
-      frag.appendChild(renderCard(ad, geo));
-    });
-    cards.appendChild(frag);
-
-    ADS_OFFSET = j.next_offset || (ADS_OFFSET + list.length);
-    if(list.length < limit) ADS_END = true;
-
-  }catch(e){
-    document.getElementById("moreLoader")?.remove();
-    if(reset){
-      cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ ${t("publish_error")}</div></div>`;
-    }
-  }
-
-  ADS_LOADING = false;
-}
-
-// ====== RENDER CARD ======
-function renderCard(ad, geo){
-  const card = document.createElement("div");
-  card.className = "glass card";
-
-  const avatarStyle = ad.photo ? `style="background-image:url('${escapeHtml(ad.photo)}')"` : "";
-
-  let dist = "";
-  if(geo && ad.lat && ad.lng){
-    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
-    dist = `📍 ${d.toFixed(1)} km`;
-  }
-
-  const typeLabel = (()=>{
-    if(ad.type==="now") return t("type_now");
-    if(ad.type==="20") return t("type_20");
-    return t("type_fill");
-  })();
-
-  const rating = Number(ad.rating ?? 0);
-  const reviewsCount = Number(ad.reviews_count ?? 0);
-  const points = Number(ad.points ?? 0);
-
-  const carLine = `${ad.carBrand || ""} ${ad.carNumber || ""}`.trim();
-
-  card.innerHTML = `
-    <div class="card-head">
-      <div class="card-left">
-        <div class="card-avatar" ${avatarStyle}></div>
-        <div>
-          <div class="card-name">${escapeHtml(ad.name || "—")}</div>
-          <div class="card-sub">${escapeHtml(carLine)}</div>
-        </div>
-      </div>
-
-      <button class="like-btn" title="Like" onclick="likeDriver('${escapeJs(ad.phone)}')">💛</button>
-    </div>
-
-    <div class="card-body">
-      <div class="route-line">
-        <span class="route-pill">${escapeHtml(ad.from || "")}</span>
-        <span>→</span>
-        <span class="route-pill">${escapeHtml(ad.to || "")}</span>
-      </div>
-
-      <div class="card-info">
-        <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
-        <div class="badge">👥 ${escapeHtml(String(ad.seats ?? ""))}</div>
-        <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
-        ${dist ? `<div class="badge">${dist}</div>` : ""}
-        <div class="badge">🏆 ${points}</div>
-        <div class="badge">⭐ ${rating.toFixed(1)} (${reviewsCount})</div>
-      </div>
-
-      ${ad.comment ? `<div class="badge">${escapeHtml(ad.comment || "")}</div>` : ""}
-
-      <div class="card-actions">
-        <button class="action call" onclick="callPhone('${escapeJs(ad.phone)}')">${t("call")}</button>
-        <button class="action msg" onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(ad.name||"")}')">${t("message")}</button>
-      </div>
-    </div>
-  `;
-
-  return card;
-}
-
-// ===== LIKE (backend) =====
-window.likeDriver = async (phone)=>{
-  if(!phone) return;
-  try{
-    const r = await apiFetch(API + "/api/like", {
-      method:"POST",
-      body: JSON.stringify({ phone })
-    });
-    const j = await r.json().catch(()=>({}));
-    if(!r.ok || !j.ok){
-      toast(j.error || "❌ Like error", true);
-      return;
-    }
-    toast("💛 Like!");
-    loadAds(true);
-    renderProfileView();
-  }catch(e){
-    toast("❌ Network", true);
-  }
-};
-
-// ===== CALL / MSG =====
-window.callPhone = (phone)=>{
-  if(!phone) return;
-  window.location.href = `tel:${phone}`;
-};
-
-window.msgUser = (phone,name)=>{
-  try{
-    if(window.Telegram && Telegram.WebApp){
-      Telegram.WebApp.showPopup({
-        title: "📩",
-        message: `${name}\n${phone}`,
-        buttons:[{type:"ok"}]
-      });
-      return;
-    }
-  }catch(e){}
-  alert(`${name}\n${phone}`);
-};
-
-// ===== PUBLISH AD =====
-window.publishAd = async ()=>{
- async function postWithRetry(url, payload, retries=2){
-  for(let i=0;i<=retries;i++){
-    try{
-      const r = await fetch(url, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      const j = await r.json().catch(()=>({}));
-
-      // OK
-      if(r.ok && (j.ok === undefined || j.ok === true)){
-        return { ok:true, status:r.status, data:j };
-      }
-
-      // 4xx => retry qilmaymiz
-      if(r.status >= 400 && r.status < 500){
-        return { ok:false, status:r.status, data:j };
-      }
-
-    }catch(e){
-      // render cold-start bo'lishi mumkin -> retry qilamiz
-    }
-
-    // wait 0.8s and retry
-    await new Promise(res=>setTimeout(res, 800));
-  }
-
-  return { ok:false, status:0, data:{} };
-}
-
-window.publishAd = async ()=>{
-  const profile = getProfile();
-  if(!profile){
-    alert(t("need_profile"));
-    return;
-  }
-
-  const fromEl = document.getElementById("ad-from");
-  const toEl = document.getElementById("ad-to");
-  const typeEl = document.getElementById("ad-type");
-  const priceEl = document.getElementById("ad-price");
-  const seatsEl = document.getElementById("ad-seats");
-  const commentEl = document.getElementById("ad-comment");
-
-  // ID lar borligini tekshir
-  if(!fromEl || !toEl || !typeEl || !priceEl || !seatsEl){
-    toast("❌ HTML input id xato!", true);
-    return;
-  }
-
-  const from = fromEl.value.trim();
-  const to = toEl.value.trim();
-  const type = typeEl.value || "now";
-  const price = priceEl.value.trim();
-  const seats = seatsEl.value.trim();
-  const comment = (commentEl?.value || "").trim();
-
-  if(!from || !to || !price){
-    alert(t("fill_required"));
-    return;
-  }
-
-  let seatsNum = parseInt(seats || "0", 10);
-  if(Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
-  if(seatsNum > 4) seatsNum = 4;
-
-  const geoEnabled = document.getElementById("geoToggle")?.checked;
-  const geo = geoEnabled ? getGeo() : null;
-
-  const payload = {
-    role: profile.role,
-    name: profile.name,
-    phone: profile.phone,
-    carBrand: profile.carBrand || "",
-    carNumber: profile.carNumber || "",
-    photo: profile.photo || "",
-
-    from,
-    to,
-    type,
-    price: String(price),
-    seats: seatsNum,
-    comment,
-
-    lat: geo?.lat ?? null,
-    lng: geo?.lng ?? null,
-  };
-
-  console.log("✅ PUBLISH PAYLOAD:", payload);
-
-  try{
-    const result = await postWithRetry(API + "/api/ads", payload, 2);
-
-    console.log("✅ PUBLISH RESPONSE:", result.status, result.data);
-
-    if(!result.ok){
-      const msg = result.data?.error || "Publish failed";
-      toast("❌ " + msg, true);
-      return;
-    }
-
-    closeSheet("createAdSheet");
-    toast(t("published_ok"));
-
-    clearAdForm();
-
-    // reload
-    await loadAds(true);
-    await renderMyAds();
-
-  }catch(e){
-    console.log("❌ Publish ERROR:", e);
-    toast(t("publish_error"), true);
-  }
-};
-
-
-function clearAdForm(){
-  ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.value = "";
-  });
-}
-
-// ===== SETTINGS / DONATE =====
-window.donateNow = ()=>{
-  toast("💛 711 GROUP");
-};
-
-// ===== TOAST =====
 function toast(msg, danger=false){
   try{
     if(window.Telegram && Telegram.WebApp){
@@ -931,15 +302,932 @@ function toast(msg, danger=false){
   alert(msg);
 }
 
-// ===== PROFILE VIEW =====
+// ====== STATE ======
+let FEED_MODE = "drivers"; // drivers | clients
+let SORT_MODE = "time";    // time | distance
+let ADS_CACHE = [];
+let USERS_CACHE = [];
+let ONLINE_SET = new Set(); // WS online
+
+// ====== LOCAL STORAGE KEYS ======
+const LS = {
+  lang: "lang",
+  role: "role",
+  profile: "profile",
+  geo: "geo",
+  notify: "notify",
+  bannerSeen: "bannerSeen"
+};
+
+// ====== PROFILE (LOCAL BASIC CACHE) ======
+function getProfile(){
+  return safeJson(localStorage.getItem(LS.profile) || "null", null);
+}
+function setProfile(p){
+  localStorage.setItem(LS.profile, JSON.stringify(p));
+}
+
+// ====== GEO ======
+function saveGeo(lat,lng){
+  localStorage.setItem(LS.geo, JSON.stringify({lat,lng,ts:Date.now()}));
+}
+function getGeo(){
+  return safeJson(localStorage.getItem(LS.geo) || "null", null);
+}
+function distanceKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// =============================
+// BACKEND API WRAPPER
+// =============================
+async function apiGet(path){
+  const r = await fetch(API + path);
+  const j = await r.json().catch(()=> ({}));
+  if(!r.ok) throw new Error(j?.error || "GET failed");
+  return j;
+}
+async function apiPost(path, body){
+  const r = await fetch(API + path, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body || {})
+  });
+  const j = await r.json().catch(()=> ({}));
+  if(!r.ok) throw new Error(j?.error || "POST failed");
+  return j;
+}
+async function apiPut(path, body){
+  const r = await fetch(API + path, {
+    method:"PUT",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body || {})
+  });
+  const j = await r.json().catch(()=> ({}));
+  if(!r.ok) throw new Error(j?.error || "PUT failed");
+  return j;
+}
+async function apiDelete(path){
+  const r = await fetch(API + path, { method:"DELETE" });
+  const j = await r.json().catch(()=> ({}));
+  if(!r.ok) throw new Error(j?.error || "DELETE failed");
+  return j;
+}
+
+// =============================
+// SUPABASE UPLOAD via BACKEND
+// =============================
+async function uploadFileToBackend(file){
+  const fd = new FormData();
+  fd.append("file", file);
+
+  const r = await fetch(API + "/api/upload", {
+    method:"POST",
+    body: fd
+  });
+  const j = await r.json().catch(()=> ({}));
+  if(!r.ok || !j.ok) throw new Error(j?.error || "upload failed");
+  return j.url;
+}
+
+// =============================
+// WS (CHAT + PRESENCE)
+// =============================
+let ws = null;
+let wsRetry = 0;
+let wsPingTimer = null;
+
+function wsUrl(){
+  const base = WS_HTTP.replace("https://","wss://").replace("http://","ws://");
+  const uid = tgId() || "guest";
+  return `${base}/ws?uid=${encodeURIComponent(uid)}`;
+}
+
+function wsSend(obj){
+  try{
+    if(!ws || ws.readyState !== 1) return;
+    ws.send(JSON.stringify(obj));
+  }catch(e){}
+}
+
+function wsConnect(){
+  try{
+    if(ws && (ws.readyState===0 || ws.readyState===1)) return;
+
+    ws = new WebSocket(wsUrl());
+
+    ws.onopen = ()=>{
+      wsRetry = 0;
+      console.log("✅ WS connected");
+
+      if(wsPingTimer) clearInterval(wsPingTimer);
+      wsPingTimer = setInterval(()=> wsSend({type:"ping"}), 20000);
+
+      // request online list
+      wsSend({type:"presence_list"});
+    };
+
+    ws.onmessage = (e)=>{
+      try{
+        const msg = JSON.parse(e.data);
+
+        if(msg.type==="presence_list"){
+          ONLINE_SET = new Set(msg.online || []);
+          renderCards(); // refresh online badges
+          return;
+        }
+
+        if(msg.type==="presence"){
+          const uid = String(msg.uid||"");
+          if(msg.status==="online") ONLINE_SET.add(uid);
+          if(msg.status==="offline") ONLINE_SET.delete(uid);
+          renderCards();
+          return;
+        }
+
+        if(msg.type==="typing"){
+          handleTyping(msg);
+          return;
+        }
+
+        if(msg.type==="message"){
+          handleIncomingMessage(msg);
+          return;
+        }
+
+      }catch(err){
+        console.log("WS message parse error", err);
+      }
+    };
+
+    ws.onclose = ()=>{
+      console.log("❌ WS disconnected");
+      if(wsPingTimer) clearInterval(wsPingTimer);
+      wsRetry++;
+      const wait = Math.min(15000, 700 * wsRetry);
+      setTimeout(wsConnect, wait);
+    };
+
+    ws.onerror = ()=>{
+      // do nothing
+    };
+
+  }catch(e){
+    console.log("WS connect error", e);
+  }
+}
+
+// =============================
+// CHAT (ULTRA BASIC UI LOGIC)
+// NOTE: We use Telegram popup minimal now.
+// Full chat screen later (final UI).
+// =============================
+let ACTIVE_CHAT = null; // {chat_id, to, name}
+
+async function openChat(toTelegramId, name){
+  const my = tgId();
+  if(!my || !toTelegramId) return;
+
+  const chat_id = [my, String(toTelegramId)].sort().join("_");
+  ACTIVE_CHAT = { chat_id, to: String(toTelegramId), name: name || "User" };
+
+  // load history
+  let items = [];
+  try{
+    const j = await apiGet(`/api/messages/${encodeURIComponent(chat_id)}?limit=60`);
+    items = j.items || [];
+  }catch(e){}
+
+  // show simple popup with last messages + send
+  const last = items.slice(0,8).reverse().map(m=>{
+    const who = (String(m.from_telegram_id)===my) ? "You" : (name||"User");
+    return `${who}: ${m.text || (m.voice_url ? "🎤 Voice" : "")}`;
+  }).join("\n");
+
+  try{
+    Telegram.WebApp.showPopup({
+      title: "💬 " + (name||"Chat"),
+      message: last ? last : "Chat ready ✅\nYozing...",
+      buttons: [{id:"send", type:"default", text:"Send message"},{type:"cancel"}]
+    }, (btnId)=>{
+      if(btnId==="send"){
+        Telegram.WebApp.showPopup({
+          title:"✍️",
+          message:"Message yuborish uchun pastdagi inputdan foydalanamiz (keyingi update).",
+          buttons:[{type:"ok"}]
+        });
+      }
+    });
+  }catch(e){
+    alert("Chat opened");
+  }
+}
+
+function handleTyping(msg){
+  // typing indicator placeholder
+}
+
+async function handleIncomingMessage(msg){
+  // save to backend for history
+  try{
+    await apiPost("/api/messages/save", {
+      chat_id: msg.chat_id,
+      from_telegram_id: msg.from,
+      to_telegram_id: msg.to,
+      text: msg.text || ""
+    });
+  }catch(e){}
+}
+
+// send text message (hook later)
+async function sendChatText(text){
+  if(!ACTIVE_CHAT) return;
+  const my = tgId();
+  wsSend({
+    type:"message",
+    chat_id: ACTIVE_CHAT.chat_id,
+    to: ACTIVE_CHAT.to,
+    text: text
+  });
+
+  // save
+  try{
+    await apiPost("/api/messages/save", {
+      chat_id: ACTIVE_CHAT.chat_id,
+      from_telegram_id: my,
+      to_telegram_id: ACTIVE_CHAT.to,
+      text: text
+    });
+  }catch(e){}
+}
+
+// =============================
+// ADMIN CHECK
+// =============================
+function isAdminLocal(){
+  return tgId() === ADMIN_TELEGRAM_ID;
+}
+
+// =============================
+// BANNER (3s on enter)
+// =============================
+async function checkAndShowBanner(){
+  try{
+    const seenKey = LS.bannerSeen + ":" + (new Date().toDateString());
+    if(localStorage.getItem(seenKey)==="1") return;
+
+    const j = await apiGet("/api/admin/banner");
+    const banner = j.banner;
+    if(!banner || !banner.image_url) return;
+
+    // create overlay
+    const wrap = document.createElement("div");
+    wrap.style.position = "fixed";
+    wrap.style.inset = "0";
+    wrap.style.zIndex = "9999";
+    wrap.style.background = "rgba(0,0,0,.55)";
+    wrap.style.backdropFilter = "blur(10px)";
+    wrap.style.display = "grid";
+    wrap.style.placeItems = "center";
+
+    wrap.innerHTML = `
+      <div style="
+        width:min(420px,92vw);
+        border-radius:24px;
+        overflow:hidden;
+        border:1px solid rgba(255,255,255,.18);
+        background:rgba(255,255,255,.08);
+      ">
+        <img src="${escapeHtml(banner.image_url)}" style="width:100%; display:block;" />
+      </div>
+    `;
+
+    document.body.appendChild(wrap);
+
+    setTimeout(()=>{
+      wrap.remove();
+      localStorage.setItem(seenKey,"1");
+    }, 3000);
+
+  }catch(e){}
+}
+
+// =============================
+// BOOT
+// =============================
+document.addEventListener("DOMContentLoaded", async ()=>{
+  try{
+    if(window.Telegram && Telegram.WebApp){
+      Telegram.WebApp.ready();
+      Telegram.WebApp.expand();
+    }
+  }catch(e){}
+
+  // loading hide
+  setTimeout(()=> $("loading")?.classList.remove("active"), 900);
+
+  // ws connect
+  wsConnect();
+
+  // show banner
+  checkAndShowBanner();
+
+  // init toggles
+  initToggles();
+
+  // admin btn show
+  checkAdminBtn();
+
+  // auto profile prefill from TG (first time)
+  prefillProfileFromTelegram();
+
+  // start logic
+  const lang = localStorage.getItem(LS.lang);
+  const role = localStorage.getItem(LS.role);
+  const profile = getProfile();
+
+  if(typeof applyI18n === "function") applyI18n();
+
+  if(!lang){
+    showScreen("screen-language");
+    return;
+  }
+  if(!role){
+    showScreen("screen-role");
+    return;
+  }
+  if(!profile){
+    showScreen("screen-profile");
+    updateProfileUIRole();
+    return;
+  }
+
+  // sync profile to backend (upsert)
+  await syncProfileToBackend();
+
+  showScreen("screen-home");
+  nav("home");
+});
+
+// =============================
+// LANGUAGE
+// =============================
+window.setLang = (lang)=>{
+  localStorage.setItem(LS.lang, lang);
+  if(typeof applyI18n === "function") applyI18n();
+
+  const role = localStorage.getItem(LS.role);
+  const profile = getProfile();
+  if(!role) showScreen("screen-role");
+  else if(!profile) showScreen("screen-profile");
+};
+
+// =============================
+// ROLE
+// =============================
+window.selectRole = (role)=>{
+  localStorage.setItem(LS.role, role);
+  updateProfileUIRole();
+  showScreen("screen-profile");
+};
+
+function updateProfileUIRole(){
+  const role = localStorage.getItem(LS.role);
+  const driverExtra = $("driver-extra");
+  if(driverExtra){
+    driverExtra.style.display = role==="driver" ? "block" : "none";
+  }
+}
+
+window.goBackTo = (id)=> showScreen(id);
+
+// =============================
+// PROFILE PREFILL + SAVE
+// =============================
+function prefillProfileFromTelegram(){
+  const u = tgUser();
+  if(!u) return;
+
+  // prefill only if inputs exist
+  if($("p-name") && !$("p-name").value) $("p-name").value = tgName();
+  if($("p-phone") && !$("p-phone").value) $("p-phone").value = ""; // user must input
+}
+
+async function syncProfileToBackend(){
+  const p = getProfile();
+  if(!p) return;
+
+  try{
+    await apiPost("/api/users/upsert", {
+      telegram_id: tgId(),
+      role: p.role,
+      name: p.name,
+      phone: p.phone,
+      username: tgUsername(),
+      bio: p.bio || "",
+      photo_url: p.photo_url || "",
+      cover_url: p.cover_url || "",
+      city: p.city || ""
+    });
+  }catch(e){}
+}
+
+window.saveProfile = async ()=>{
+  const role = localStorage.getItem(LS.role);
+  const name = $("p-name")?.value.trim();
+  const phone = $("p-phone")?.value.trim();
+  const carBrand = $("p-car-brand")?.value.trim();
+  const carNumber = $("p-car-number")?.value.trim();
+  const bio = $("p-bio")?.value.trim();
+
+  if(!name || !phone){
+    toast("❗ Profilni to‘ldiring", true);
+    return;
+  }
+
+  const profile = {
+    telegram_id: tgId(),
+    username: tgUsername(),
+    role,
+    name,
+    phone,
+    carBrand: role==="driver" ? (carBrand||"") : "",
+    carNumber: role==="driver" ? (carNumber||"") : "",
+    photo_url: "",   // device only
+    cover_url: "",   // device only
+    bio: bio || "",
+    city: ""
+  };
+
+  setProfile(profile);
+
+  // sync to backend
+  await syncProfileToBackend();
+
+  showScreen("screen-home");
+  nav("home");
+};
+
+// =============================
+// DEVICE UPLOAD (Profile Photo / Cover)
+// =============================
+async function pickFile(){
+  return new Promise((resolve)=>{
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = ()=> resolve(input.files?.[0] || null);
+    input.click();
+  });
+}
+
+window.uploadProfilePhoto = async ()=>{
+  const p = getProfile();
+  if(!p) return;
+
+  const file = await pickFile();
+  if(!file) return;
+
+  try{
+    toast("⏳ Upload...");
+    const url = await uploadFileToBackend(file);
+    const np = {...p, photo_url: url};
+    setProfile(np);
+    await syncProfileToBackend();
+    toast("✅ Foto saqlandi");
+    renderProfileView();
+    loadAds();
+  }catch(e){
+    toast("❌ Upload error", true);
+  }
+};
+
+window.uploadCoverPhoto = async ()=>{
+  const p = getProfile();
+  if(!p) return;
+
+  const file = await pickFile();
+  if(!file) return;
+
+  try{
+    toast("⏳ Upload...");
+    const url = await uploadFileToBackend(file);
+    const np = {...p, cover_url: url};
+    setProfile(np);
+    await syncProfileToBackend();
+    toast("✅ Cover saqlandi");
+    renderProfileView();
+  }catch(e){
+    toast("❌ Upload error", true);
+  }
+};
+
+window.addCarPhoto = async ()=>{
+  const p = getProfile();
+  if(!p) return;
+
+  const file = await pickFile();
+  if(!file) return;
+
+  try{
+    toast("⏳ Upload...");
+    const url = await uploadFileToBackend(file);
+    await apiPost("/api/car-photos/add", { telegram_id: tgId(), image_url: url });
+    toast("✅ Car photo qo‘shildi");
+    renderProfileView();
+  }catch(e){
+    toast("❌ Upload error", true);
+  }
+};
+
+// =============================
+// NAV
+// =============================
+window.nav = async (where)=>{
+  if(where==="home"){
+    setActiveNav("home");
+    showScreen("screen-home");
+    await loadAds();
+    return;
+  }
+  if(where==="profile"){
+    setActiveNav("profile");
+    showScreen("screen-profile-view");
+    await renderProfileView();
+    return;
+  }
+  if(where==="admin"){
+    showScreen("screen-admin");
+    await adminRefresh();
+    return;
+  }
+};
+
+// =============================
+// FEED SWITCH + SEARCH
+// =============================
+window.switchFeed = async (mode)=>{
+  FEED_MODE = mode;
+  $("tabDrivers")?.classList.toggle("active", mode==="drivers");
+  $("tabClients")?.classList.toggle("active", mode==="clients");
+  await loadAds();
+};
+
+window.searchAds = async ()=>{
+  // simple frontend filter from cache
+  renderCards();
+};
+
+// =============================
+// SORT
+// =============================
+window.toggleSort = async ()=>{
+  const geoOn = $("geoToggle")?.checked;
+  if(geoOn){
+    SORT_MODE = (SORT_MODE==="distance") ? "time" : "distance";
+  }else{
+    SORT_MODE = "time";
+  }
+  updateSortLine();
+  renderCards();
+};
+
+function updateSortLine(){
+  const el = $("sortLine");
+  if(!el) return;
+  if(SORT_MODE==="distance"){
+    el.innerHTML = `↕️ <span>Saralash: masofa</span>`;
+  }else{
+    el.innerHTML = `↕️ <span>Saralash: vaqt</span>`;
+  }
+}
+
+// =============================
+// LOAD ADS (ULTRA)
+// =============================
+async function loadAds(){
+  const cards = $("cards");
+  if(!cards) return;
+
+  cards.innerHTML = `
+    <div class="skeleton glass"></div>
+    <div class="skeleton glass"></div>
+    <div class="skeleton glass"></div>
+  `;
+
+  try{
+    const j = await apiGet("/api/ads");
+    ADS_CACHE = Array.isArray(j.ads) ? j.ads : [];
+    renderCards();
+  }catch(e){
+    cards.innerHTML = `<div class="glass card"><div class="muted">⚠️ Server error</div></div>`;
+  }
+}
+
+function renderCards(){
+  const cards = $("cards");
+  if(!cards) return;
+
+  const q = ($("searchInput")?.value || "").trim().toLowerCase();
+  const geo = getGeo();
+  const geoEnabled = !!geo && ($("geoToggle")?.checked);
+
+  let list = [...ADS_CACHE];
+
+  // feed filter
+  list = list.filter(a=>{
+    if(FEED_MODE==="drivers") return a.role === "driver";
+    return a.role === "client";
+  });
+
+  // search filter
+  if(q){
+    list = list.filter(a=>{
+      const s = `${a.name||""} ${a.phone||""} ${a.frm||a.from||""} ${a.too||a.to||""} ${a.car_brand||""} ${a.car_number||""}`.toLowerCase();
+      return s.includes(q);
+    });
+  }
+
+  // sort
+  if(SORT_MODE==="distance" && geoEnabled){
+    list.sort((a,b)=>{
+      const da = (a.lat && a.lng) ? distanceKm(geo.lat, geo.lng, a.lat, a.lng) : 99999;
+      const db = (b.lat && b.lng) ? distanceKm(geo.lat, geo.lng, b.lat, b.lng) : 99999;
+      return da - db;
+    });
+  }else{
+    list.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+  }
+
+  if(list.length===0){
+    cards.innerHTML = `<div class="glass card"><div class="muted">Hozircha e’lon yo‘q</div></div>`;
+    return;
+  }
+
+  cards.innerHTML = "";
+  list.forEach(ad => cards.appendChild(renderCard(ad, geo, geoEnabled)));
+}
+
+function renderCard(ad, geo, geoEnabled){
+  const card = document.createElement("div");
+  card.className = "glass card";
+
+  const avatar = ad.photo_url ? `style="background-image:url('${escapeHtml(ad.photo_url)}')"` : "";
+  const typeLabel = (()=>{
+    if(ad.ad_type==="now") return "SRAZU EDI";
+    if(ad.ad_type==="20") return "20 daqiqada";
+    return "Odam to‘lsa";
+  })();
+
+  let dist = "";
+  if(geoEnabled && geo && ad.lat && ad.lng){
+    const d = distanceKm(geo.lat, geo.lng, ad.lat, ad.lng);
+    dist = `📍 ${d.toFixed(1)} km`;
+  }
+
+  const seats = Number(ad.seats ?? 0);
+  const fullBadge = seats<=0 ? `<div class="badge" style="border-color:rgba(255,80,80,.35)">🚫 TO‘LDI</div>` : "";
+
+  const online = ONLINE_SET.has(String(ad.telegram_id||""));
+  const onlineBadge = online ? `<div class="badge">🟢 Online</div>` : `<div class="badge">⚫ Offline</div>`;
+
+  const me = tgId();
+  const isOwner = String(ad.telegram_id||"") === String(me);
+
+  const ownerSeatsControls = isOwner ? `
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="chip" onclick="seatsDelta(${ad.id},-1)">➖</button>
+      <div class="badge">👥 ${seats}</div>
+      <button class="chip" onclick="seatsDelta(${ad.id},1)">➕</button>
+    </div>
+  ` : `<div class="badge">👥 ${seats}</div>`;
+
+  card.innerHTML = `
+    <div class="card-head">
+      <div class="card-left">
+        <div class="card-avatar" ${avatar}></div>
+        <div>
+          <div class="card-name">${escapeHtml(ad.name || "—")}</div>
+          <div class="card-sub">${escapeHtml(ad.car_brand || "")} ${escapeHtml(ad.car_number || "")}</div>
+        </div>
+      </div>
+
+      <button class="like-btn" onclick="likeDriver('${escapeJs(ad.phone||"")}')">💛</button>
+    </div>
+
+    <div class="card-body" onclick="openAdDetail(${ad.id})" style="cursor:pointer;">
+      <div class="route-line">
+        <span class="route-pill">${escapeHtml(ad.frm || "")}</span>
+        <span>→</span>
+        <span class="route-pill">${escapeHtml(ad.too || "")}</span>
+      </div>
+
+      <div class="card-info">
+        <div class="badge">⏱ ${escapeHtml(typeLabel)}</div>
+        ${ownerSeatsControls}
+        ${fullBadge}
+        <div class="badge">💰 ${escapeHtml(String(ad.price ?? ""))}</div>
+        ${dist ? `<div class="badge">${dist}</div>` : ""}
+        <div class="badge">🏆 ${escapeHtml(String(ad.points ?? 0))}</div>
+        <div class="badge">👁 ${escapeHtml(String(ad.views ?? 0))}</div>
+        ${onlineBadge}
+      </div>
+
+      ${ad.comment ? `<div class="badge">${escapeHtml(ad.comment)}</div>` : ""}
+
+      <div class="card-actions" onclick="event.stopPropagation()">
+        <button class="action call" onclick="callPhone('${escapeJs(ad.phone||"")}')">Qo‘ng‘iroq</button>
+        <button class="action msg" onclick="msgUser('${escapeJs(ad.telegram_id||"")}','${escapeJs(ad.name||"")}')">Yozish</button>
+      </div>
+    </div>
+  `;
+
+  return card;
+}
+
+// =============================
+// AD DETAIL + VIEW COUNT
+// =============================
+window.openAdDetail = async (adId)=>{
+  const ad = ADS_CACHE.find(x=>Number(x.id)===Number(adId));
+  if(!ad) return;
+
+  // add view
+  try{
+    await apiPost(`/api/ads/${adId}/view`, { viewer_telegram_id: tgId() });
+    // refresh ads quickly
+    await loadAds();
+  }catch(e){}
+
+  // show detail popup
+  const msg = `
+${ad.name || "—"}
+${ad.phone || ""}
+
+Маршрут:
+${ad.frm || ""} → ${ad.too || ""}
+
+Цена: ${ad.price || ""}
+Места: ${ad.seats ?? 0}
+Points: ${ad.points ?? 0}
+Views: ${ad.views ?? 0}
+
+${ad.car_brand || ""} ${ad.car_number || ""}
+${ad.comment || ""}
+  `.trim();
+
+  try{
+    Telegram.WebApp.showPopup({
+      title:"🚕 E’lon",
+      message: msg,
+      buttons:[{type:"ok"}]
+    });
+  }catch(e){
+    alert(msg);
+  }
+};
+
+// =============================
+// LIKE (backend real)
+// =============================
+window.likeDriver = async (phone)=>{
+  if(!phone) return;
+  try{
+    await apiPost("/api/like", {
+      target_phone: phone,
+      from_telegram_id: tgId()
+    });
+    await loadAds();
+    await renderProfileView();
+  }catch(e){
+    toast("❌ Like error", true);
+  }
+};
+
+// =============================
+// SEATS DELTA (backend real)
+// =============================
+window.seatsDelta = async (adId, delta)=>{
+  try{
+    await apiPost(`/api/ads/${adId}/seats`, {
+      telegram_id: tgId(),
+      delta: delta
+    });
+    await loadAds();
+  }catch(e){
+    toast("❌ Seats error", true);
+  }
+};
+
+// =============================
+// CALL / MSG
+// =============================
+window.callPhone = (phone)=>{
+  if(!phone) return;
+  window.location.href = `tel:${phone}`;
+};
+
+window.msgUser = (toTelegramId, name)=>{
+  // open ultra chat
+  openChat(toTelegramId, name);
+};
+
+// =============================
+// PUBLISH AD (ULTRA)
+// =============================
+window.publishAd = async ()=>{
+  const p = getProfile();
+  if(!p){
+    toast("❗ Profilni to‘ldiring", true);
+    return;
+  }
+
+  const from = $("ad-from")?.value.trim();
+  const to = $("ad-to")?.value.trim();
+  const type = $("ad-type")?.value;
+  const price = $("ad-price")?.value.trim();
+  const seats = $("ad-seats")?.value.trim();
+  const comment = ($("ad-comment")?.value || "").trim();
+
+  if(!from || !to || !price){
+    toast("❗ A, B va Narx shart!", true);
+    return;
+  }
+
+  let seatsNum = parseInt(seats || "0", 10);
+  if(Number.isNaN(seatsNum) || seatsNum < 0) seatsNum = 0;
+  if(seatsNum > 8) seatsNum = 8;
+
+  // geo attach
+  const geoEnabled = $("geoToggle")?.checked;
+  const geo = geoEnabled ? getGeo() : null;
+
+  const payload = {
+    telegram_id: tgId(),
+    role: p.role,
+    name: p.name,
+    phone: p.phone,
+    car_brand: p.carBrand || "",
+    car_number: p.carNumber || "",
+    photo_url: p.photo_url || "",
+
+    from,
+    to,
+    type,
+    price,
+    seats: seatsNum,
+    comment,
+
+    lat: geo?.lat || null,
+    lng: geo?.lng || null
+  };
+
+  try{
+    await apiPost("/api/ads", payload);
+
+    closeSheet("createAdSheet");
+    toast("✅ E’lon joylandi");
+    clearAdForm();
+    await loadAds();
+    await renderMyAds();
+  }catch(e){
+    toast("❌ E’lon berishda xatolik", true);
+  }
+};
+
+function clearAdForm(){
+  ["ad-from","ad-to","ad-price","ad-seats","ad-comment"].forEach(id=>{
+    const el = $(id);
+    if(el) el.value = "";
+  });
+}
+
+// =============================
+// PROFILE VIEW (ULTRA)
+// =============================
 async function renderProfileView(){
   const p = getProfile();
   if(!p) return;
 
-  const avatar = document.getElementById("avatar");
+  // fetch from backend to get rating + gallery
+  let backendUser = null;
+  try{
+    const j = await apiGet(`/api/users/${encodeURIComponent(tgId())}`);
+    backendUser = j.user || null;
+  }catch(e){}
+
+  // avatar
+  const avatar = $("avatar");
   if(avatar){
-    if(p.photo){
-      avatar.style.backgroundImage = `url('${p.photo}')`;
+    if(p.photo_url){
+      avatar.style.backgroundImage = `url('${p.photo_url}')`;
       avatar.innerHTML = "";
     }else{
       avatar.style.backgroundImage = "";
@@ -947,129 +1235,117 @@ async function renderProfileView(){
     }
   }
 
-  document.getElementById("pv-name").innerText = p.name || "—";
-  document.getElementById("pv-phone").innerText = p.phone || "—";
-
-  const carLine = (p.role==="driver")
-    ? `${p.carBrand || ""} ${p.carNumber || ""}`.trim()
-    : "";
-  document.getElementById("pv-car").innerText = carLine ? carLine : (p.role==="client" ? "👤 Client" : "");
-
-  // points from backend
-  try{
-    const r = await apiFetch(API + "/api/points?phone=" + encodeURIComponent(p.phone));
-    const j = await r.json().catch(()=>({}));
-    const pts = Number(j.points || 0);
-    document.getElementById("pv-points").innerText = `${pts} 🏆`;
-  }catch(e){
-    document.getElementById("pv-points").innerText = `0 🏆`;
+  // cover (if you add element in html later)
+  const pvName = $("pv-name"); if(pvName) pvName.innerText = p.name || "—";
+  const pvPhone = $("pv-phone"); if(pvPhone) pvPhone.innerText = p.phone || "—";
+  const pvCar = $("pv-car");
+  if(pvCar){
+    const carLine = (p.role==="driver") ? `${p.carBrand||""} ${p.carNumber||""}`.trim() : "👤 Client";
+    pvCar.innerText = carLine || "—";
   }
 
-  // rating from backend
-  try{
-    const r2 = await apiFetch(API + "/api/reviews/rating?phone=" + encodeURIComponent(p.phone));
-    const s = await r2.json().catch(()=>({}));
-    const avg = Number(s.avg || 0);
-    const cnt = Number(s.count || 0);
-    document.getElementById("pv-rating").innerText = `${avg.toFixed(1)} ⭐ (${cnt})`;
-  }catch(e){
-    document.getElementById("pv-rating").innerText = `0.0 ⭐`;
+  // rating
+  const rating = backendUser ? (backendUser.rating || 0) : 0;
+  const points = 0; // points in profile can be from likes by phone if needed later
+
+  $("pv-rating") && ($("pv-rating").innerText = `${Number(rating||0).toFixed(1)} ⭐`);
+  $("pv-points") && ($("pv-points").innerText = `${points} 🏆`);
+
+  // my ads
+  await renderMyAds();
+
+  // car gallery render if html added later
+  // For now: show count in console
+  if(backendUser?.car_photos){
+    console.log("car photos:", backendUser.car_photos.length);
   }
 
-  // fill edit sheet inputs
-  document.getElementById("ep-name").value = p.name || "";
-  document.getElementById("ep-phone").value = p.phone || "";
-  document.getElementById("ep-car-brand").value = p.carBrand || "";
-  document.getElementById("ep-car-number").value = p.carNumber || "";
-  document.getElementById("ep-photo").value = p.photo || "";
-
-  renderMyAds();
+  // show admin
+  checkAdminBtn();
 }
 
-// ===== EDIT PROFILE SAVE =====
 window.saveProfileEdit = async ()=>{
   const p = getProfile();
   if(!p) return;
 
   const np = {
     ...p,
-    name: document.getElementById("ep-name").value.trim(),
-    phone: document.getElementById("ep-phone").value.trim(),
-    carBrand: document.getElementById("ep-car-brand").value.trim(),
-    carNumber: document.getElementById("ep-car-number").value.trim(),
-    photo: document.getElementById("ep-photo").value.trim(),
+    name: $("ep-name")?.value.trim() || p.name,
+    phone: $("ep-phone")?.value.trim() || p.phone,
+    carBrand: $("ep-car-brand")?.value.trim() || p.carBrand,
+    carNumber: $("ep-car-number")?.value.trim() || p.carNumber,
   };
 
   setProfile(np);
-
-  try{
-    await apiFetch(API + "/api/profile/save", {
-      method:"POST",
-      body: JSON.stringify(np)
-    });
-  }catch(e){}
+  await syncProfileToBackend();
 
   closeSheet("editProfileSheet");
   toast("✅ Saved");
-  renderProfileView();
-  loadAds(true);
-  checkAdmin();
+  await renderProfileView();
+  await loadAds();
 };
 
-// ===== MY ADS =====
+// =============================
+// MY ADS
+// =============================
 async function renderMyAds(){
-  const listEl = document.getElementById("myAdsList");
+  const listEl = $("myAdsList");
   if(!listEl) return;
 
-  const p = getProfile();
-  if(!p) return;
+  const me = tgId();
+  const mine = ADS_CACHE.filter(a=> String(a.telegram_id||"")===String(me));
 
-  try{
-    const res = await apiFetch(API + "/api/ads?limit=60&offset=0");
-    const j = await res.json().catch(()=>({ok:false,items:[]}));
-    const data = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
-    const mine = (Array.isArray(data)?data:[]).filter(a => a.phone === p.phone);
-
-    if(mine.length===0){
-      listEl.innerHTML = `<div class="glass card"><div class="muted">${t("no_ads")}</div></div>`;
-      return;
-    }
-
-    listEl.innerHTML = "";
-    mine.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
-    mine.forEach(ad=>{
-      const div = document.createElement("div");
-      div.className = "glass card";
-      div.innerHTML = `
-        <div class="card-body">
-          <div class="route-line">
-            <span class="route-pill">${escapeHtml(ad.from||"")}</span>
-            <span>→</span>
-            <span class="route-pill">${escapeHtml(ad.to||"")}</span>
-          </div>
-          <div class="card-info">
-            <div class="badge">💰 ${escapeHtml(String(ad.price||""))}</div>
-            <div class="badge">👥 ${escapeHtml(String(ad.seats||""))}</div>
-          </div>
-        </div>
-      `;
-      listEl.appendChild(div);
-    });
-  }catch(e){
-    listEl.innerHTML = `<div class="glass card"><div class="muted">⚠️</div></div>`;
+  if(mine.length===0){
+    listEl.innerHTML = `<div class="glass card"><div class="muted">Hozircha e’lon yo‘q</div></div>`;
+    return;
   }
+
+  listEl.innerHTML = "";
+  mine.sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+  mine.forEach(ad=>{
+    const div = document.createElement("div");
+    div.className = "glass card";
+    div.innerHTML = `
+      <div class="card-body">
+        <div class="route-line">
+          <span class="route-pill">${escapeHtml(ad.frm||"")}</span>
+          <span>→</span>
+          <span class="route-pill">${escapeHtml(ad.too||"")}</span>
+        </div>
+        <div class="card-info">
+          <div class="badge">💰 ${escapeHtml(String(ad.price||""))}</div>
+          <div class="badge">👥 ${escapeHtml(String(ad.seats||""))}</div>
+          <button class="chip" onclick="deleteMyAd(${ad.id})">🗑</button>
+        </div>
+      </div>
+    `;
+    listEl.appendChild(div);
+  });
 }
 
-// ===== GEO TOGGLE =====
-function initToggles(){
-  const geoToggle = document.getElementById("geoToggle");
-  const notifyToggle = document.getElementById("notifyToggle");
+window.deleteMyAd = async (adId)=>{
+  try{
+    await apiDelete(`/api/ads/${adId}?telegram_id=${encodeURIComponent(tgId())}`);
+    toast("✅ Deleted");
+    await loadAds();
+    await renderMyAds();
+  }catch(e){
+    toast("❌ Delete error", true);
+  }
+};
 
-  const notify = localStorage.getItem("notify") === "1";
+// =============================
+// GEO TOGGLE
+// =============================
+function initToggles(){
+  const geoToggle = $("geoToggle");
+  const notifyToggle = $("notifyToggle");
+
+  const notify = localStorage.getItem(LS.notify) === "1";
   if(notifyToggle){
     notifyToggle.checked = notify;
     notifyToggle.onchange = ()=>{
-      localStorage.setItem("notify", notifyToggle.checked ? "1" : "0");
+      localStorage.setItem(LS.notify, notifyToggle.checked ? "1" : "0");
     };
   }
 
@@ -1080,11 +1356,11 @@ function initToggles(){
       if(geoToggle.checked){
         await updateLocationNow();
       }else{
-        localStorage.removeItem("geo");
+        localStorage.removeItem(LS.geo);
         updateGeoLine();
         SORT_MODE = "time";
         updateSortLine();
-        loadAds(true);
+        renderCards();
       }
     };
   }
@@ -1094,7 +1370,7 @@ function initToggles(){
 }
 
 window.updateLocationNow = async ()=>{
-  const geoStatus = document.getElementById("geoStatus");
+  const geoStatus = $("geoStatus");
   if(geoStatus) geoStatus.innerText = "…";
 
   if(!navigator.geolocation){
@@ -1106,7 +1382,7 @@ window.updateLocationNow = async ()=>{
     (pos)=>{
       saveGeo(pos.coords.latitude, pos.coords.longitude);
       updateGeoLine();
-      loadAds(true);
+      renderCards();
       if(geoStatus){
         geoStatus.innerText = `✅ ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
       }
@@ -1115,481 +1391,55 @@ window.updateLocationNow = async ()=>{
       if(geoStatus) geoStatus.innerText = "❌ Geo error";
       console.log(err);
     },
-    { enableHighAccuracy:true, timeout:12000, maximumAge: 0 }
+    { enableHighAccuracy:true, timeout:12000, maximumAge: 15000 }
   );
 };
 
 function updateGeoLine(){
-  const geoLine = document.getElementById("geoLine");
+  const geoLine = $("geoLine");
   if(!geoLine) return;
 
   const geo = getGeo();
   const on = !!geo;
-  if(on){
-    geoLine.innerHTML = `📍 <span>${localStorage.getItem("lang")==="ru" ? "Геолокация: ON" : "Geolokatsiya: ON"}</span>`;
-  }else{
-    geoLine.innerHTML = `📍 <span data-i18n="geo_off">${t("geo_off")}</span>`;
-  }
+  geoLine.innerHTML = on
+    ? `📍 <span>Geolokatsiya: ON</span>`
+    : `📍 <span>Geolokatsiya: OFF</span>`;
 }
 
-// ===== TOP DRIVERS =====
-window.loadTopDrivers = async ()=>{
-  const el = document.getElementById("topDriversList");
-  if(!el) return;
-
-  el.innerHTML = `<div class="skeleton glass"></div><div class="skeleton glass"></div>`;
-
-  try{
-    const r = await apiFetch(API + "/api/top/drivers");
-    const list = await r.json().catch(()=>[]);
-
-    if(!Array.isArray(list) || list.length===0){
-      el.innerHTML = `<div class="glass card"><div class="muted">No drivers</div></div>`;
-      return;
-    }
-
-    el.innerHTML = "";
-    list.forEach((d,idx)=>{
-      const div = document.createElement("div");
-      div.className = "glass card";
-      const avatarStyle = d.photo ? `style="background-image:url('${escapeHtml(d.photo)}')"` : "";
-      const carLine = `${d.carBrand||""} ${d.carNumber||""}`.trim();
-      const online = d.online ? "🟢" : "⚫";
-
-      div.innerHTML = `
-        <div class="card-head">
-          <div class="card-left">
-            <div class="card-avatar" ${avatarStyle}></div>
-            <div>
-              <div class="card-name">#${idx+1} ${escapeHtml(d.name||"—")} ${online}</div>
-              <div class="card-sub">${escapeHtml(carLine)}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card-body">
-          <div class="card-info">
-            <div class="badge">⭐ ${escapeHtml(String(d.rating||0))} (${escapeHtml(String(d.reviews_count||0))})</div>
-            <div class="badge">🏆 ${escapeHtml(String(d.points||0))}</div>
-          </div>
-
-          <div class="card-actions">
-            <button class="action call" onclick="callPhone('${escapeJs(d.phone)}')">📞 Call</button>
-            <button class="action msg" onclick="msgUser('${escapeJs(d.phone)}','${escapeJs(d.name||"")}')">💬 Msg</button>
-          </div>
-        </div>
-      `;
-      el.appendChild(div);
-    });
-
-  }catch(e){
-    el.innerHTML = `<div class="glass card"><div class="muted">Network error</div></div>`;
-  }
-};
-
-// ===== FULLSCREEN MAP =====
-let FULL_MAP = null;
-let FULL_MARKERS = [];
-
-function clearFullMarkers(){
-  if(!FULL_MAP) return;
-  FULL_MARKERS.forEach(m=>FULL_MAP.removeLayer(m));
-  FULL_MARKERS = [];
-}
-
-function driverPopupHtml(ad){
-  const car = `${ad.carBrand||""} ${ad.carNumber||""}`.trim();
-  const pts = ad.points ?? 0;
-  const rating = Number(ad.rating ?? 0).toFixed(1);
-
-  return `
-    <div style="min-width:180px;">
-      <div style="font-weight:900;">${escapeHtml(ad.name||"—")}</div>
-      <div style="font-size:12px;opacity:.8;margin-top:2px;">
-        ${escapeHtml(car)}
-      </div>
-      <div style="margin-top:6px;font-size:12px;">
-        ⭐ ${rating} • 🏆 ${pts}
-      </div>
-      <div style="margin-top:8px;display:flex;gap:6px;">
-        <button style="flex:1;padding:8px;border:none;border-radius:12px;font-weight:900;background:#f6c300;color:#111;"
-          onclick="callPhone('${escapeJs(ad.phone)}')">Call</button>
-        <button style="flex:1;padding:8px;border:1px solid rgba(0,0,0,.2);border-radius:12px;font-weight:900;background:#fff;"
-          onclick="msgUser('${escapeJs(ad.phone)}','${escapeJs(ad.name||"")}')">Msg</button>
-      </div>
-    </div>
-  `;
-}
-
-window.openFullMap = async ()=>{
-  showScreen("screen-map-full");
-  try{ Telegram.WebApp.expand(); }catch(e){}
-  try{ Telegram.WebApp.disableVerticalSwipes(); }catch(e){}
-
-  const geo = getGeo();
-  const center = geo ? [geo.lat, geo.lng] : [41.3111, 69.2797];
-
-  if(!FULL_MAP){
-    FULL_MAP = L.map("mapFullBox", { zoomControl:false }).setView(center, geo ? 13 : 11);
-
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19
-    }).addTo(FULL_MAP);
-
-    setTimeout(()=>FULL_MAP.invalidateSize(), 300);
-  }else{
-    setTimeout(()=>FULL_MAP.invalidateSize(), 300);
-    FULL_MAP.setView(center, geo ? 13 : 11);
-  }
-
-  await renderFullMapDrivers();
-};
-
-window.closeFullMap = ()=>{
-  nav("home");
-  setTimeout(()=>{
-    try{ if(FULL_MAP) FULL_MAP.invalidateSize(); }catch(e){}
-  }, 200);
-};
-
-async function renderFullMapDrivers(){
-  if(!FULL_MAP) return;
-  clearFullMarkers();
-
-  const g = getGeo();
-  if(g){
-    const me = L.circleMarker([g.lat, g.lng], { radius: 9 }).addTo(FULL_MAP);
-    me.bindPopup("📍 You");
-    FULL_MARKERS.push(me);
-
-    if(FILTERS?.radiusKm && FILTERS.radiusKm > 0){
-      const circle = L.circle([g.lat, g.lng], { radius: FILTERS.radiusKm * 1000 }).addTo(FULL_MAP);
-      FULL_MARKERS.push(circle);
-    }
-  }
-
-  try{
-    const r = await apiFetch(API + "/api/ads?limit=60&offset=0");
-    const j = await r.json().catch(()=>({ok:false,items:[]}));
-    const list = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
-    let drivers = list.filter(a => a.role==="driver" && a.online !== 0);
-    drivers = drivers.filter(d => d.lat && d.lng);
-
-    if(FILTERS?.radiusKm && FILTERS.radiusKm > 0){
-      const geo = getGeo();
-      if(geo){
-        drivers = drivers.filter(d=>{
-          const dist = distanceKm(geo.lat, geo.lng, d.lat, d.lng);
-          return dist <= FILTERS.radiusKm;
-        });
-      }
-    }
-
-    drivers.forEach(ad=>{
-      const m = L.marker([ad.lat, ad.lng]).addTo(FULL_MAP);
-      m.bindPopup(driverPopupHtml(ad));
-      FULL_MARKERS.push(m);
-    });
-
-  }catch(e){
-    toast("❌ Map error", true);
-  }
-}
-
-// ===== ADMIN =====
-function isAdmin(){
-  try{
-    const id = String(Telegram.WebApp.initDataUnsafe?.user?.id || "");
-    return id && id === String(ADMIN_TG_ID);
-  }catch(e){
-    return false;
-  }
-}
-
-function checkAdmin(){
+// =============================
+// ADMIN
+// =============================
+function checkAdminBtn(){
   const adminBtn = document.querySelector(".admin-only");
   if(!adminBtn) return;
-  adminBtn.style.display = isAdmin() ? "flex" : "none";
+
+  if(isAdminLocal()){
+    adminBtn.style.display = "flex";
+  }else{
+    adminBtn.style.display = "none";
+  }
 }
 
 window.adminRefresh = async ()=>{
-  const el = document.getElementById("adminStats");
-  if(el) el.innerText = "Loading...";
-
   try{
-    const r = await apiFetch(API + "/api/ads?limit=60&offset=0");
-    const j = await r.json().catch(()=>({ok:false,items:[]}));
-    const ads = Array.isArray(j.items) ? j.items : (Array.isArray(j)?j:[]);
-    const count = Array.isArray(ads)?ads.length:0;
-    if(el) el.innerText = `Ads: ${count}`;
+    const j = await apiGet("/api/ads");
+    const count = Array.isArray(j.ads) ? j.ads.length : 0;
+    $("adminStats").innerText = `Ads: ${count}`;
   }catch(e){
-    if(el) el.innerText = "Error";
+    $("adminStats").innerText = "Error";
   }
 };
 
-window.adminLoadProfiles = async ()=>{
-  if(!isAdmin()){
-    toast("Not admin", true);
-    return;
-  }
-
-  const box = document.getElementById("adminUsers");
-  if(!box) return;
-
-  box.innerHTML = `<div class="skeleton glass"></div><div class="skeleton glass"></div>`;
-
-  try{
-    const r = await apiFetch(API + "/api/admin/profiles");
-    const j = await r.json().catch(()=>({}));
-
-    if(!r.ok || !j.ok){
-      box.innerHTML = `<div class="glass card"><div class="muted">Admin error</div></div>`;
-      return;
-    }
-
-    const items = Array.isArray(j.items)?j.items:[];
-    if(items.length===0){
-      box.innerHTML = `<div class="glass card"><div class="muted">No users</div></div>`;
-      return;
-    }
-
-    box.innerHTML = "";
-    items.forEach(u=>{
-      const div = document.createElement("div");
-      div.className = "glass card";
-
-      const carLine = `${u.carBrand||""} ${u.carNumber||""}`.trim();
-      const status = u.online ? "🟢" : "⚫";
-      const ver = u.verified ? "✅ Verified" : "❌ Not verified";
-      const ban = u.banned ? "⛔ BANNED" : "✅ Active";
-
-      div.innerHTML = `
-        <div class="card-body">
-          <div class="card-name">${escapeHtml(u.name||"—")} ${status}</div>
-          <div class="muted small">${escapeHtml(u.role)} • ${escapeHtml(u.phone)}</div>
-          ${carLine ? `<div class="badge" style="margin-top:6px;">🚘 ${escapeHtml(carLine)}</div>` : ""}
-
-          <div class="card-info" style="margin-top:8px;">
-            <div class="badge">${ver}</div>
-            <div class="badge">${ban}</div>
-          </div>
-
-          <div class="card-actions" style="margin-top:10px;">
-            <button class="action call" onclick="adminToggleVerify('${escapeJs(u.phone)}', ${u.verified?0:1})">
-              ${u.verified ? "❌ Unverify" : "✅ Verify"}
-            </button>
-            <button class="action msg" onclick="adminToggleBan('${escapeJs(u.phone)}', ${u.banned?0:1})">
-              ${u.banned ? "✅ Unban" : "⛔ Ban"}
-            </button>
-          </div>
-        </div>
-      `;
-      box.appendChild(div);
-    });
-
-  }catch(e){
-    box.innerHTML = `<div class="glass card"><div class="muted">Network</div></div>`;
-  }
+window.adminClearAll = async ()=>{
+  toast("Admin clear (keyin qo‘shamiz)");
 };
 
-window.adminToggleVerify = async (phone, v)=>{
-  try{
-    const r = await apiFetch(API + "/api/admin/profile/verify", {
-      method:"POST",
-      body: JSON.stringify({ phone, verified: !!v })
-    });
-    const j = await r.json().catch(()=>({}));
-    if(!r.ok || !j.ok){
-      toast("❌ Error", true);
-      return;
-    }
-    toast("✅ Updated");
-    adminLoadProfiles();
-  }catch(e){
-    toast("❌ Network", true);
-  }
+// =============================
+// DONATE
+// =============================
+window.donateNow = ()=>{
+  toast("💛 711 GROUP");
 };
 
-window.adminToggleBan = async (phone, v)=>{
-  try{
-    const r = await apiFetch(API + "/api/admin/profile/ban", {
-      method:"POST",
-      body: JSON.stringify({ phone, banned: !!v })
-    });
-    const j = await r.json().catch(()=>({}));
-    if(!r.ok || !j.ok){
-      toast("❌ Error", true);
-      return;
-    }
-    toast("✅ Updated");
-    adminLoadProfiles();
-  }catch(e){
-    toast("❌ Network", true);
-  }
-};
-
-window.adminClearAds = async ()=>{
-  toast("✅ Cleanup auto");
-};
-
-// ===== ADMIN BANNER =====
-window.adminSetBanner = async ()=>{
-  if(!isAdmin()){
-    toast("Not admin", true);
-    return;
-  }
-
-  const title = document.getElementById("banTitle")?.value.trim();
-  const text  = document.getElementById("banText")?.value.trim();
-  const image = document.getElementById("banImage")?.value.trim();
-  const link  = document.getElementById("banLink")?.value.trim();
-
-  try{
-    const r = await apiFetch(API + "/api/admin/banner/set", {
-      method:"POST",
-      body: JSON.stringify({ title, text, image, link, active:1 })
-    });
-
-    const j = await r.json().catch(()=>({}));
-    if(!r.ok || !j.ok){
-      toast("❌ Banner error", true);
-      console.log(j);
-      return;
-    }
-
-    toast("✅ Banner published");
-  }catch(e){
-    toast("❌ Network", true);
-  }
-};
-
-window.adminBannerOff = async ()=>{
-  if(!isAdmin()){
-    toast("Not admin", true);
-    return;
-  }
-  try{
-    const r = await apiFetch(API + "/api/admin/banner/off", { method:"POST" });
-    const j = await r.json().catch(()=>({}));
-    if(!r.ok || !j.ok){
-      toast("❌ Error", true);
-      return;
-    }
-    toast("🛑 Banner OFF");
-  }catch(e){
-    toast("❌ Network", true);
-  }
-};
-
-// ===== BANNER (USER) =====
-let CURRENT_BANNER = null;
-
-function bannerHiddenToday(){
-  const until = parseInt(localStorage.getItem("banner_hide_until") || "0", 10) || 0;
-  return Date.now() < until;
-}
-
-window.hideBannerToday = ()=>{
-  localStorage.setItem("banner_hide_until", String(Date.now() + 24*60*60*1000));
-  closeSheet("bannerModal");
-  toast("✅ Bugun banner ko‘rsatilmaydi");
-};
-
-window.openBannerLink = ()=>{
-  if(!CURRENT_BANNER) return;
-  const link = (CURRENT_BANNER.link || "").trim();
-  if(!link){
-    toast("Link yo‘q", true);
-    return;
-  }
-  try{
-    window.open(link, "_blank");
-  }catch(e){
-    toast("Link ochilmadi", true);
-  }
-};
-
-async function loadBanner(){
-  try{
-    const r = await apiFetch(API + "/api/banner");
-    const j = await r.json().catch(()=>({}));
-    if(!j.ok || !j.banner) return;
-
-    const b = j.banner;
-    if(!b || b.active !== 1) return;
-    if(bannerHiddenToday()) return;
-
-    CURRENT_BANNER = b;
-
-    const el = document.getElementById("bannerBody");
-    if(el){
-      el.innerHTML = `
-        ${b.image ? `<div class="banner-img"><img src="${escapeHtml(b.image)}" /></div>` : ""}
-        <div class="banner-title">${escapeHtml(b.title || "🔥 Promo")}</div>
-        <div class="banner-text">${escapeHtml(b.text || "")}</div>
-      `;
-    }
-
-    openSheet("bannerModal");
-  }catch(e){
-    console.log("banner err", e);
-  }
-}
-
-// ===== ORDERS LIST (simple) =====
-window.loadMyOrders = async ()=>{
-  const p = getProfile();
-  const listEl = document.getElementById("ordersList");
-  if(!p || !listEl) return;
-
-  listEl.innerHTML = `<div class="skeleton glass"></div><div class="skeleton glass"></div>`;
-
-  try{
-    const r = await apiFetch(API + "/api/orders/my?phone=" + encodeURIComponent(p.phone));
-    const j = await r.json().catch(()=>({ok:false,items:[]}));
-
-    if(!r.ok || !j.ok){
-      listEl.innerHTML = `<div class="glass card"><div class="muted">No orders</div></div>`;
-      return;
-    }
-
-    const items = Array.isArray(j.items)?j.items:[];
-    if(items.length===0){
-      listEl.innerHTML = `<div class="glass card"><div class="muted">No orders</div></div>`;
-      return;
-    }
-
-    listEl.innerHTML = "";
-    items.forEach(o=>{
-      const div = document.createElement("div");
-      div.className = "glass card";
-      div.innerHTML = `
-        <div class="card-body">
-          <div class="route-line">
-            <span class="route-pill">${escapeHtml(o.from||"")}</span>
-            <span>→</span>
-            <span class="route-pill">${escapeHtml(o.to||"")}</span>
-          </div>
-          <div class="card-info">
-            <div class="badge">💰 ${escapeHtml(String(o.price||""))}</div>
-            <div class="badge">🟡 ${escapeHtml(String(o.status||""))}</div>
-          </div>
-        </div>
-      `;
-      listEl.appendChild(div);
-    });
-
-  }catch(e){
-    listEl.innerHTML = `<div class="glass card"><div class="muted">Network error</div></div>`;
-  }
-};
-
-// ===== ESCAPE HELPERS =====
-function escapeHtml(str){
-  return String(str || "").replace(/[&<>"']/g, s=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[s]));
-}
-function escapeJs(str){
-  return String(str||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-}
+// expose search
+window.searchAds = searchAds;
