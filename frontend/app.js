@@ -1,7 +1,7 @@
 // ====== CONFIG ======
 const API = "https://taxi-backend-5kl2.onrender.com";
 const AUTO_DELETE_SECONDS = 60 * 60; // 60 минут
-const ADMIN_TG_ID = "123456789"; // <-- o'zingizni Telegram ID yozing
+const ADMIN_TG_ID = "6813692852"; // <-- o'zingizni Telegram ID yozing
 
 // ====== I18N ======
 const DICT = {
@@ -32,7 +32,7 @@ const DICT = {
     point_a: "TOCHKA A",
     point_b: "TOCHKA B",
     ad_type: "Tur",
-    type_now: "SRAZU EDI",
+    type_now: "HOZIR KETAMIZ",
     type_20: "20 daqiqada",
     type_fill: "Odam to‘lsa",
     price: "Narx",
