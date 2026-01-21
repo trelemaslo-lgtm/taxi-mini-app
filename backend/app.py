@@ -1,256 +1,166 @@
 import os
-import math
+import time
+import uuid
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from dotenv import load_dotenv
 
 import db
 
-load_dotenv()
-
-FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
-ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0") or "0")
-AUTO_DELETE_SECONDS = int(os.getenv("AUTO_DELETE_SECONDS", "3600") or "3600")
-VIEW_COOLDOWN_SECONDS = int(os.getenv("VIEW_COOLDOWN_SECONDS", "3600") or "3600")
-
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": [FRONTEND_URL, "*"]}})
 
+# CORS
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Init DB
 db.init_db()
 
-
-def ok(data=None):
-    return jsonify(data or {"ok": True})
-
-
-def err(msg, code=400):
-    return jsonify({"error": msg}), code
-
-
-def haversine_km(lat1, lng1, lat2, lng2):
-    R = 6371
-    dLat = math.radians(lat2 - lat1)
-    dLng = math.radians(lng2 - lng1)
-    a = math.sin(dLat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLng / 2) ** 2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-
+# ---------------- BASIC ----------------
 @app.get("/")
 def root():
-    return ok({"name": "711 TAXI BACKEND ULTRA", "ok": True})
+    return jsonify({"ok": True, "service": "711 TAXI BACKEND", "time": int(time.time())})
 
 
-@app.get("/health")
+@app.get("/api/health")
 def health():
-    return ok({"ok": True})
+    return jsonify({"ok": True})
 
 
-# -------------------------
-# ADS
-# -------------------------
+# ---------------- ADS API ----------------
 @app.get("/api/ads")
-def get_ads():
-    ads = db.list_ads(active_only=True)
-
-    # Optional query: lat/lng for distance
-    lat = request.args.get("lat")
-    lng = request.args.get("lng")
-
-    if lat and lng:
-        try:
-            lat = float(lat)
-            lng = float(lng)
-            for a in ads:
-                if a.get("lat") is not None and a.get("lng") is not None:
-                    a["distance_km"] = haversine_km(lat, lng, float(a["lat"]), float(a["lng"]))
-                else:
-                    a["distance_km"] = None
-        except:
-            pass
-
-    # rename fields for frontend compatibility
+def api_ads_list():
+    ads = db.list_ads()
+    # attach points + views
     for a in ads:
-        a["from"] = a.get("point_a") or ""
-        a["to"] = a.get("point_b") or ""
-        a["carBrand"] = a.get("car_brand") or ""
-        a["carNumber"] = a.get("car_number") or ""
-
+        a["points"] = db.get_user_stats(a["phone"])["points"]
+        a["views"] = db.count_views_for_ad(a["id"])
     return jsonify(ads)
 
 
 @app.post("/api/ads")
-def post_ad():
+def api_ads_create():
     try:
-        payload = request.get_json(force=True) or {}
+        data = request.get_json(force=True) or {}
+        required = ["role", "name", "phone", "from", "to", "type", "price"]
+        for k in required:
+            if not data.get(k):
+                return jsonify({"ok": False, "error": f"missing_{k}"}), 400
 
-        # Required: from/to/phone
-        if not payload.get("phone"):
-            return err("phone required")
-        if not (payload.get("from") or payload.get("point_a")):
-            return err("from required")
-        if not (payload.get("to") or payload.get("point_b")):
-            return err("to required")
+        ad_id = str(uuid.uuid4())
+        ad = {
+            "id": ad_id,
+            "role": data.get("role"),
+            "name": data.get("name"),
+            "phone": data.get("phone"),
+            "carBrand": data.get("carBrand", ""),
+            "carNumber": data.get("carNumber", ""),
+            "photo": data.get("photo", ""),
+            "from": data.get("from"),
+            "to": data.get("to"),
+            "type": data.get("type"),
+            "price": data.get("price"),
+            "seats": int(data.get("seats", 0)),
+            "comment": data.get("comment", ""),
+            "lat": data.get("lat", None),
+            "lng": data.get("lng", None),
+            "created_at": int(time.time()),
+        }
 
-        ad = db.create_ad(payload)
-        ad["from"] = ad.get("point_a") or ""
-        ad["to"] = ad.get("point_b") or ""
-        ad["carBrand"] = ad.get("car_brand") or ""
-        ad["carNumber"] = ad.get("car_number") or ""
-
-        return ok(ad)
-
+        db.insert_ad(ad)
+        return jsonify({"ok": True, "id": ad_id})
     except Exception as e:
-        return err(str(e), 500)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.patch("/api/ads/<int:ad_id>")
-def patch_ad(ad_id: int):
-    try:
-        patch = request.get_json(force=True) or {}
-        phone = (patch.get("phone") or "").strip()
-        if not phone:
-            return err("phone required")
-        ad = db.update_ad(ad_id, phone, patch)
-        if not ad:
-            return err("not found or not owner", 404)
-        ad["from"] = ad.get("point_a") or ""
-        ad["to"] = ad.get("point_b") or ""
-        return ok(ad)
-    except Exception as e:
-        return err(str(e), 500)
+@app.get("/api/ads/<ad_id>")
+def api_ads_get(ad_id):
+    ad = db.get_ad(ad_id)
+    if not ad:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    ad["points"] = db.get_user_stats(ad["phone"])["points"]
+    ad["views"] = db.count_views_for_ad(ad_id)
+    return jsonify(ad)
 
 
-@app.delete("/api/ads/<int:ad_id>")
-def delete_ad(ad_id: int):
-    try:
-        payload = request.get_json(force=True) or {}
-        phone = (payload.get("phone") or "").strip()
-        if not phone:
-            return err("phone required")
-        ok_del = db.delete_ad(ad_id, phone)
-        if not ok_del:
-            return err("not found or not owner", 404)
-        return ok({"ok": True})
-    except Exception as e:
-        return err(str(e), 500)
+@app.post("/api/ads/<ad_id>/view")
+def api_ads_view(ad_id):
+    ad = db.get_ad(ad_id)
+    if not ad:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    viewer_key = request.headers.get("X-Viewer-Key") or request.args.get("viewer") or "anon"
+    changed = db.add_view(ad_id, viewer_key, cooldown_seconds=3600)
+    return jsonify({"ok": True, "counted": changed, "views": db.count_views_for_ad(ad_id)})
 
 
-# Like endpoint (REAL points)
-@app.post("/api/ads/<int:ad_id>/like")
-def like_ad(ad_id: int):
-    try:
-        payload = request.get_json(force=True) or {}
-        from_phone = (payload.get("from_phone") or payload.get("phone") or "guest").strip()
-        result = db.like_ad(ad_id, from_phone)
-        return ok(result)
-    except Exception as e:
-        return err(str(e), 500)
+@app.post("/api/ads/<ad_id>/like")
+def api_ads_like(ad_id):
+    ad = db.get_ad(ad_id)
+    if not ad:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    # Like adds point to owner
+    db.add_like(ad_id, ad["phone"])
+    return jsonify({"ok": True, "points": db.get_user_stats(ad["phone"])["points"]})
 
 
-# Views endpoint (unique cooldown)
-@app.post("/api/ads/<int:ad_id>/view")
-def view_ad(ad_id: int):
-    try:
-        payload = request.get_json(force=True) or {}
-        viewer_id = (payload.get("viewer_id") or payload.get("phone") or payload.get("tg_id") or "anon").strip()
-        result = db.add_view(ad_id, str(viewer_id), cooldown_seconds=VIEW_COOLDOWN_SECONDS)
-        return ok(result)
-    except Exception as e:
-        return err(str(e), 500)
+@app.post("/api/ads/<ad_id>/seats")
+def api_ads_seats(ad_id):
+    ad = db.get_ad(ad_id)
+    if not ad:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    data = request.get_json(force=True) or {}
+    seats = data.get("seats")
+    phone = data.get("phone")
+
+    if seats is None:
+        return jsonify({"ok": False, "error": "missing_seats"}), 400
+    if phone is None:
+        return jsonify({"ok": False, "error": "missing_phone"}), 400
+
+    # only owner can update
+    if ad["phone"] != phone:
+        return jsonify({"ok": False, "error": "not_owner"}), 403
+
+    seats = int(seats)
+    if seats < 0: seats = 0
+    if seats > 6: seats = 6
+
+    ok = db.update_seats(ad_id, seats)
+    return jsonify({"ok": ok, "seats": seats})
 
 
-# Seats update (driver can decrease/increase)
-@app.post("/api/ads/<int:ad_id>/seats")
-def seats_update(ad_id: int):
-    try:
-        payload = request.get_json(force=True) or {}
-        phone = (payload.get("phone") or "").strip()
-        delta = int(payload.get("delta", 0))
-        if not phone:
-            return err("phone required")
-        ad = db.get_ad(ad_id)
-        if not ad:
-            return err("ad not found", 404)
-        if ad["phone"] != phone:
-            return err("not owner", 403)
-        new_seats = int(ad.get("seats") or 0) + delta
-        if new_seats < 0:
-            new_seats = 0
-        if new_seats > 4:
-            new_seats = 4
-        updated = db.update_ad(ad_id, phone, {"seats": new_seats})
-        return ok({"ok": True, "seats": new_seats, "ad": updated})
-    except Exception as e:
-        return err(str(e), 500)
+@app.delete("/api/ads/<ad_id>")
+def api_ads_delete(ad_id):
+    data = request.get_json(force=True) or {}
+    phone = data.get("phone")
+    if not phone:
+        return jsonify({"ok": False, "error": "missing_phone"}), 400
+
+    ok = db.delete_ad(ad_id, phone)
+    if not ok:
+        return jsonify({"ok": False, "error": "not_allowed"}), 403
+
+    return jsonify({"ok": True})
 
 
-# -------------------------
-# USERS / PROFILE
-# -------------------------
-@app.post("/api/profile")
-def profile_upsert():
-    try:
-        payload = request.get_json(force=True) or {}
-        user = db.upsert_user(payload)
-        return ok(user)
-    except Exception as e:
-        return err(str(e), 500)
+# ---------------- USERS STATS ----------------
+@app.get("/api/users/<path:phone>/stats")
+def api_user_stats(phone):
+    st = db.get_user_stats(phone)
+    return jsonify(st)
 
 
-@app.get("/api/profile/<phone>")
-def profile_get(phone: str):
-    u = db.get_user_by_phone(phone)
-    if not u:
-        return err("not found", 404)
-    return ok(u)
+# ---------------- ADMIN ----------------
+@app.get("/api/admin/analytics")
+def api_admin_analytics():
+    # later secure by ADMIN_TELEGRAM_ID + initData validation
+    return jsonify(db.analytics())
 
 
-# -------------------------
-# ADMIN BANNER
-# -------------------------
-def is_admin(req) -> bool:
-    try:
-        payload = req.get_json(force=True) or {}
-    except:
-        payload = {}
-    tg_id = payload.get("tg_id") or payload.get("telegram_id")
-    try:
-        return int(tg_id) == int(ADMIN_TELEGRAM_ID)
-    except:
-        return False
-
-
-@app.get("/api/banner")
-def banner_get():
-    return ok(db.get_banner())
-
-
-@app.post("/api/admin/banner")
-def banner_set():
-    try:
-        payload = request.get_json(force=True) or {}
-        # allow admin by tg_id
-        tg_id = payload.get("tg_id")
-        if tg_id is not None:
-            if int(tg_id) != int(ADMIN_TELEGRAM_ID):
-                return err("not admin", 403)
-
-        image = payload.get("image")
-        if not image:
-            return err("image required")
-        return ok(db.set_banner(image))
-    except Exception as e:
-        return err(str(e), 500)
-
-
-@app.post("/api/admin/clear")
-def admin_clear():
-    try:
-        payload = request.get_json(force=True) or {}
-        tg_id = payload.get("tg_id")
-        if tg_id is not None:
-            if int(tg_id) != int(ADMIN_TELEGRAM_ID):
-                return err("not admin", 403)
-        return ok(db.admin_clear_all())
-    except Exception as e:
-        return err(str(e), 500)
+# ---------------- RUN ----------------
+if __name__ == "__main__":
+    # Render uses PORT env
+    port = int(os.environ.get("PORT", "10000"))
+    app.run(host="0.0.0.0", port=port)
