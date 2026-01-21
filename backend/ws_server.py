@@ -5,141 +5,206 @@ import asyncio
 import websockets
 from websockets.server import WebSocketServerProtocol
 
-HOST = "0.0.0.0"
-PORT = int(os.getenv("PORT", "10000"))
+# ==============================
+# 711 TAXI WS ULTRA SERVER
+# ==============================
+# Message types:
+#  - hello: {type:"hello", user:"PHONE_OR_TGID"}
+#  - presence: {type:"presence", user:"...", online:true}
+#  - typing: {type:"typing", from:"...", to:"..."}
+#  - chat: {type:"chat", from:"...", to:"...", text:"..."}
+#  - ping: {type:"ping"}
+# Server answers:
+#  - pong: {type:"pong"}
+#  - presence_list: {type:"presence_list", users:[...]}
+#  - delivered messages
 
-PING_INTERVAL = int(os.getenv("WS_PING_INTERVAL", "20"))
-PING_TIMEOUT = int(os.getenv("WS_PING_TIMEOUT", "20"))
+PORT = int(os.environ.get("PORT", "10000"))
 
-MSG_RATE_LIMIT = int(os.getenv("WS_MSG_RATE_LIMIT", "25"))
-MSG_RATE_WINDOW = int(os.getenv("WS_MSG_RATE_WINDOW", "15"))  # seconds
+# online users map: user_id -> websocket
+ONLINE = {}
 
-clients = {}  # ws -> {"phone":..., "tg_id":..., "last":..., "count":...}
-rooms = {}    # room_id -> set(ws)
+# reverse lookup
+SOCKET_USER = {}
+
+# store last seen timestamps
+LAST_SEEN = {}
+
+# anti spam
+MSG_LIMIT_PER_5S = 40
+USER_RATE = {}  # user -> [count, ts_start]
 
 
-def ts():
+def now():
     return int(time.time())
 
 
-async def send(ws, data):
+def safe_json(data):
     try:
-        await ws.send(json.dumps(data))
+        return json.dumps(data)
     except:
-        pass
+        return json.dumps({"type": "error", "msg": "json_encode_error"})
 
 
-def rate_ok(meta):
-    now = ts()
-    if "window_start" not in meta:
-        meta["window_start"] = now
-        meta["count"] = 0
+def rate_ok(user: str) -> bool:
+    t = now()
+    if user not in USER_RATE:
+        USER_RATE[user] = [0, t]
+        return True
 
-    if now - meta["window_start"] > MSG_RATE_WINDOW:
-        meta["window_start"] = now
-        meta["count"] = 0
+    count, start = USER_RATE[user]
+    if t - start > 5:
+        USER_RATE[user] = [0, t]
+        return True
 
-    meta["count"] += 1
-    return meta["count"] <= MSG_RATE_LIMIT
+    if count >= MSG_LIMIT_PER_5S:
+        return False
+
+    USER_RATE[user][0] += 1
+    return True
 
 
-async def broadcast(room_id, data):
-    conns = rooms.get(room_id, set()).copy()
-    for ws in conns:
-        await send(ws, data)
+async def broadcast_presence():
+    """Send online list to everyone"""
+    users = list(ONLINE.keys())
+    payload = {"type": "presence_list", "users": users}
+    msg = safe_json(payload)
+    tasks = []
+    for ws in list(ONLINE.values()):
+        try:
+            tasks.append(ws.send(msg))
+        except:
+            pass
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def send_to(user: str, payload: dict):
+    """Send message to a user if online"""
+    ws = ONLINE.get(user)
+    if not ws:
+        return False
+    try:
+        await ws.send(safe_json(payload))
+        return True
+    except:
+        return False
 
 
 async def handler(ws: WebSocketServerProtocol):
-    clients[ws] = {"phone": None, "tg_id": None, "count": 0, "window_start": ts()}
-
-    await send(ws, {"type": "hello", "ts": ts(), "server": "711-TAXI-WS-ULTRA"})
+    """
+    Each client must send hello first:
+    {type:"hello", user:"phone or tg id"}
+    """
+    user_id = None
 
     try:
-        async for msg in ws:
-            meta = clients.get(ws, {})
-
-            if not rate_ok(meta):
-                await send(ws, {"type": "error", "message": "rate_limit"})
-                continue
-
+        async for message in ws:
             try:
-                data = json.loads(msg)
+                data = json.loads(message)
             except:
-                await send(ws, {"type": "error", "message": "bad_json"})
+                await ws.send(safe_json({"type": "error", "msg": "invalid_json"}))
                 continue
 
-            action = data.get("action")
+            msg_type = data.get("type")
 
-            if action == "auth":
-                meta["phone"] = data.get("phone")
-                meta["tg_id"] = data.get("tg_id")
-                await send(ws, {"type": "auth_ok", "phone": meta["phone"], "ts": ts()})
+            # ping/pong keep alive
+            if msg_type == "ping":
+                await ws.send(safe_json({"type": "pong"}))
                 continue
 
-            if action == "join":
-                room_id = str(data.get("room_id") or "")
-                if not room_id:
-                    await send(ws, {"type": "error", "message": "room_id_required"})
+            # First handshake
+            if msg_type == "hello":
+                user_id = str(data.get("user") or "").strip()
+                if not user_id:
+                    await ws.send(safe_json({"type": "error", "msg": "missing_user"}))
                     continue
-                rooms.setdefault(room_id, set()).add(ws)
-                await send(ws, {"type": "joined", "room_id": room_id})
-                await broadcast(room_id, {"type": "presence", "room_id": room_id, "online": online_count(room_id)})
+
+                ONLINE[user_id] = ws
+                SOCKET_USER[ws] = user_id
+                LAST_SEEN[user_id] = now()
+
+                await ws.send(safe_json({"type": "hello_ok", "user": user_id}))
+                await broadcast_presence()
                 continue
 
-            if action == "leave":
-                room_id = str(data.get("room_id") or "")
-                if room_id in rooms and ws in rooms[room_id]:
-                    rooms[room_id].remove(ws)
-                    await send(ws, {"type": "left", "room_id": room_id})
-                    await broadcast(room_id, {"type": "presence", "room_id": room_id, "online": online_count(room_id)})
+            # ignore all before hello
+            if not user_id:
+                await ws.send(safe_json({"type": "error", "msg": "send_hello_first"}))
                 continue
 
-            if action == "message":
-                room_id = str(data.get("room_id") or "")
-                text = str(data.get("text") or "")[:2000]
-                if not room_id or not text:
-                    await send(ws, {"type": "error", "message": "room_id_text_required"})
+            # rate limiting
+            if not rate_ok(user_id):
+                await ws.send(safe_json({"type": "error", "msg": "rate_limited"}))
+                continue
+
+            LAST_SEEN[user_id] = now()
+
+            # typing indicator
+            if msg_type == "typing":
+                to_user = str(data.get("to") or "").strip()
+                payload = {"type": "typing", "from": user_id, "to": to_user}
+                await send_to(to_user, payload)
+                continue
+
+            # presence manual (optional)
+            if msg_type == "presence":
+                # just broadcast list again
+                await broadcast_presence()
+                continue
+
+            # chat message
+            if msg_type == "chat":
+                to_user = str(data.get("to") or "").strip()
+                text = str(data.get("text") or "").strip()
+
+                if not to_user or not text:
+                    await ws.send(safe_json({"type": "error", "msg": "missing_to_or_text"}))
                     continue
 
                 payload = {
-                    "type": "message",
-                    "room_id": room_id,
+                    "type": "chat",
+                    "from": user_id,
+                    "to": to_user,
                     "text": text,
-                    "from_phone": meta.get("phone"),
-                    "from_tg_id": meta.get("tg_id"),
-                    "ts": ts()
+                    "ts": now()
                 }
-                await broadcast(room_id, payload)
+
+                delivered = await send_to(to_user, payload)
+
+                # ack sender
+                await ws.send(safe_json({
+                    "type": "sent_ack",
+                    "to": to_user,
+                    "delivered": delivered,
+                    "ts": now()
+                }))
                 continue
 
-            if action == "typing":
-                room_id = str(data.get("room_id") or "")
-                if not room_id:
-                    continue
-                await broadcast(room_id, {"type": "typing", "room_id": room_id, "phone": meta.get("phone"), "ts": ts()})
-                continue
+            # unknown
+            await ws.send(safe_json({"type": "error", "msg": "unknown_type"}))
 
-            await send(ws, {"type": "error", "message": "unknown_action"})
-
-    except websockets.ConnectionClosed:
+    except websockets.exceptions.ConnectionClosed:
         pass
     finally:
-        # cleanup
-        for room_id, s in list(rooms.items()):
-            if ws in s:
-                s.remove(ws)
-                asyncio.create_task(broadcast(room_id, {"type": "presence", "room_id": room_id, "online": online_count(room_id)}))
-        clients.pop(ws, None)
+        # cleanup on disconnect
+        try:
+            if ws in SOCKET_USER:
+                uid = SOCKET_USER.get(ws)
+                if uid and uid in ONLINE:
+                    ONLINE.pop(uid, None)
+                SOCKET_USER.pop(ws, None)
+                LAST_SEEN[uid] = now()
+        except:
+            pass
 
-
-def online_count(room_id):
-    return len(rooms.get(room_id, set()))
+        await broadcast_presence()
 
 
 async def main():
-    print(f"🚀 711 TAXI WS ULTRA running on {HOST}:{PORT}")
-    async with websockets.serve(handler, HOST, PORT, ping_interval=PING_INTERVAL, ping_timeout=PING_TIMEOUT):
-        await asyncio.Future()
+    print(f"✅ 711 TAXI WS ULTRA SERVER STARTED on PORT {PORT}")
+    async with websockets.serve(handler, "0.0.0.0", PORT, ping_interval=20, ping_timeout=20):
+        await asyncio.Future()  # run forever
 
 
 if __name__ == "__main__":
