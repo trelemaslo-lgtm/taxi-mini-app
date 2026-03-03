@@ -1,5 +1,5 @@
 diff --git a/frontend/app.js b/frontend/app.js
-index dedb899c29ed408f005180a26cf2ed4dc80d9ac5..b833aacb799d8bd97657799da03c883ac25c860c 100644
+index dedb899c29ed408f005180a26cf2ed4dc80d9ac5..4b0027e831ca439003b670d2d5d4fd758f326a7a 100644
 --- a/frontend/app.js
 +++ b/frontend/app.js
 @@ -6,57 +6,64 @@
@@ -836,7 +836,7 @@ index dedb899c29ed408f005180a26cf2ed4dc80d9ac5..b833aacb799d8bd97657799da03c883a
    if(!text) return;
    input.value = "";
    addBubble(text, true);
-@@ -1101,94 +1366,767 @@ function renderCarGallery(){
+@@ -1101,94 +1366,788 @@ function renderCarGallery(){
      const img = document.createElement("img");
      img.src = src;
      img.onclick = ()=> openFullscreen(src);
@@ -1530,6 +1530,26 @@ index dedb899c29ed408f005180a26cf2ed4dc80d9ac5..b833aacb799d8bd97657799da03c883a
 +  toast("Daily Deal banner orqali boshqariladi ✅");
  };
  
++
++function animateLoadingSequence(){
++  const steps = [
++    { pct: 18, text: 'INIT CORE', sub: 'created by <b>711 GROUP</b> · preparing liquid UI' },
++    { pct: 42, text: 'SYNC TELEGRAM', sub: 'secure WebApp session va theme sync' },
++    { pct: 68, text: 'FETCH FEED', sub: 'ads, support, orders va live data yuklanmoqda' },
++    { pct: 100, text: 'READY', sub: 'premium glass tajribasi tayyor ✅' }
++  ];
++  const textEl = qs('loadingText');
++  const subEl = qs('loadingSub');
++  const barEl = qs('loadingBar');
++  steps.forEach((step, idx)=>{
++    setTimeout(()=>{
++      if(textEl) textEl.textContent = step.text;
++      if(subEl) subEl.innerHTML = step.sub;
++      if(barEl) barEl.style.width = `${step.pct}%`;
++    }, idx * 190);
++  });
++}
++
 +async function registerServiceWorker(){
 +  if(!('serviceWorker' in navigator)) return;
 +  try{
@@ -1579,7 +1599,9 @@ index dedb899c29ed408f005180a26cf2ed4dc80d9ac5..b833aacb799d8bd97657799da03c883a
 +  await registerServiceWorker();
 +
    // loading
-   setTimeout(()=> qs("loading")?.classList.remove("active"), 700);
+-  setTimeout(()=> qs("loading")?.classList.remove("active"), 700);
++  animateLoadingSequence();
++  setTimeout(()=> qs("loading")?.classList.remove("active"), 920);
  
    initToggles();
    checkAdmin();
