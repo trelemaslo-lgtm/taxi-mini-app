@@ -1,5 +1,5 @@
 diff --git a/frontend/style.css b/frontend/style.css
-index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947b798488f 100644
+index 0d12568dab18de7c8414079de1ca74935b19c206..798949d4cdff6b478e794878623cc307c3f960ba 100644
 --- a/frontend/style.css
 +++ b/frontend/style.css
 @@ -1,78 +1,82 @@
@@ -460,7 +460,7 @@ index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947
    color: var(--text);
    outline:none;
  }
-@@ -1024,114 +1118,235 @@ body{ overflow-x:hidden; }
+@@ -1024,114 +1118,381 @@ body{ overflow-x:hidden; }
  .toast-ico{
    width:34px;height:34px;
    border-radius: 16px;
@@ -521,7 +521,7 @@ index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947
 +  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--glassGlow) 48%, transparent), transparent 62%);
 +  filter: blur(8px);
 +  pointer-events:none;
- }
++}
 +.loading-card::after{
 +  content:"";
 +  position:absolute;
@@ -529,7 +529,7 @@ index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947
 +  background: conic-gradient(from 120deg, transparent, rgba(255,255,255,.14), transparent 42%);
 +  animation: loadingSweep 6s linear infinite;
 +  pointer-events:none;
-+}
+ }
 +@keyframes loadingSweep{ to{ transform: rotate(1turn); } }
  @keyframes softIn{
 -  from{ opacity:0; transform: translateY(12px) scale(.98); }
@@ -562,7 +562,7 @@ index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947
 +  position:relative;
 +  display:grid;
 +  place-items:center;
- }
++}
 +.loader-ring{
 +  position:absolute;
 +  inset:0;
@@ -585,7 +585,7 @@ index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947
 +  font-size:20px;
 +  text-shadow: 0 6px 16px rgba(0,0,0,.28);
 +  animation: pulseCore 1.4s ease-in-out infinite;
-+}
+ }
 +@keyframes spin{ to{ transform: rotate(1turn); } }
 +@keyframes pulseCore{ 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.07);} }
  
@@ -700,6 +700,152 @@ index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947
 +@keyframes laneMove{
 +  to{ background-position: 30px 0; }
 +}
++
++
++
++/* ===================== ULTRA LIQUID HOTFIX ===================== */
++/* stronger compatibility + premium depth */
++:root{
++  --ultra-glass-a: rgba(255,255,255,.16);
++  --ultra-glass-b: rgba(255,255,255,.06);
++  --ultra-ring: rgba(255,255,255,.30);
++  --ultra-shadow: 0 24px 60px rgba(0,0,0,.38);
++}
++[data-theme="light"]{
++  --ultra-glass-a: rgba(255,255,255,.90);
++  --ultra-glass-b: rgba(255,255,255,.64);
++  --ultra-ring: rgba(255,255,255,.98);
++  --ultra-shadow: 0 24px 54px rgba(40,80,180,.20);
++}
++
++/* fallback first (for browsers without color-mix support) */
++.glass,
++.glass-soft,
++.topbar,
++.sheet,
++.card,
++.tabs,
++.searchbar,
++.feed-header,
++.bottom-sheet-content,
++.profile,
++.map-box{
++  background: linear-gradient(155deg, var(--ultra-glass-a), var(--ultra-glass-b));
++  border: 1px solid rgba(255,255,255,.14);
++  box-shadow: var(--ultra-shadow), inset 0 1px 0 rgba(255,255,255,.24);
++}
++
++@supports (background: color-mix(in srgb, white 50%, transparent)){
++  .glass,
++  .glass-soft,
++  .topbar,
++  .sheet,
++  .card,
++  .tabs,
++  .searchbar,
++  .feed-header,
++  .bottom-sheet-content,
++  .profile,
++  .map-box{
++    background: linear-gradient(
++      158deg,
++      color-mix(in srgb, var(--glass2) 84%, transparent),
++      color-mix(in srgb, var(--glass) 88%, transparent)
++    );
++    border-color: color-mix(in srgb, var(--ultra-ring) 32%, transparent);
++  }
++}
++
++.card,
++.sheet,
++.profile,
++.bottom-sheet-content{
++  transform: translateZ(0);
++  transition: transform .24s ease, box-shadow .28s ease, border-color .24s ease;
++}
++.card:hover,
++.sheet:hover,
++.profile:hover,
++.bottom-sheet-content:hover{
++  transform: translateY(-2px);
++  box-shadow: 0 26px 70px rgba(0,0,0,.44), 0 0 0 1px rgba(255,255,255,.22), inset 0 1px 0 rgba(255,255,255,.35);
++}
++
++.field input,
++.field select,
++.searchbar input,
++#chatInput{
++  transition: border-color .22s ease, box-shadow .22s ease, background-color .22s ease;
++}
++.field input:focus,
++.field select:focus,
++.searchbar input:focus,
++#chatInput:focus{
++  border-color: color-mix(in srgb, var(--accent) 52%, white 22%);
++  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 1px 0 rgba(255,255,255,.24);
++  background: rgba(255,255,255,.18);
++}
++[data-theme="light"] .field input:focus,
++[data-theme="light"] .field select:focus,
++[data-theme="light"] .searchbar input:focus,
++[data-theme="light"] #chatInput:focus{
++  background: rgba(255,255,255,.95);
++}
++
++.btn.primary,
++.action.call{
++  position: relative;
++  overflow: hidden;
++}
++.btn.primary::after,
++.action.call::after{
++  content:"";
++  position:absolute;
++  inset:-2px -22%;
++  background: linear-gradient(115deg, transparent 28%, rgba(255,255,255,.40) 50%, transparent 72%);
++  transform: translateX(-120%);
++  animation: ctaSweep 2.9s ease-in-out infinite;
++  pointer-events:none;
++}
++@keyframes ctaSweep{
++  0%, 64%, 100%{ transform: translateX(-120%); }
++  28%{ transform: translateX(120%); }
++}
++
++.bottom-nav{
++  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
++  border:1px solid rgba(255,255,255,.14);
++  box-shadow: 0 -16px 48px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.2);
++}
++
++.loading{
++  background:
++    radial-gradient(1000px 560px at 50% 10%, rgba(255,255,255,.13), transparent 72%),
++    radial-gradient(640px 420px at 18% 82%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 76%);
++}
++.loading-card{
++  border-color: rgba(255,255,255,.28);
++  box-shadow:
++    0 40px 110px rgba(0,0,0,.62),
++    inset 0 1px 0 rgba(255,255,255,.42),
++    0 0 58px color-mix(in srgb, var(--accent) 24%, transparent);
++}
++
++.skeleton{
++  border:1px solid rgba(255,255,255,.14);
++  background:
++    linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.03)),
++    linear-gradient(0deg, rgba(255,255,255,.02), rgba(255,255,255,.02));
++}
++.skeleton::after{
++  background: linear-gradient(98deg, transparent 30%, rgba(255,255,255,.42) 50%, transparent 64%);
++  animation-duration: 1.12s;
++}
++
++@media (max-width: 520px){
++  .topbar{ margin: 10px 10px 8px; border-radius: 20px; }
++  .loading-card{ width:min(372px, 92vw); padding:18px; }
++}
  
  /* Reduce motion for accessibility */
  @media (prefers-reduced-motion: reduce){
@@ -711,3 +857,4 @@ index 0d12568dab18de7c8414079de1ca74935b19c206..bbdb27c33ea27e5661bbebb28b49d947
 +
 +
 +*{ transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+
